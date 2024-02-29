@@ -315,7 +315,6 @@ export const TicketEdit = () => {
   };
 
   const onSubmit = async (data: any) => {
-    console.log("-----data---", data);
     delete data["id"];
     const isNew = editData.id === "new";
     setIsUploading(true);
@@ -328,9 +327,10 @@ export const TicketEdit = () => {
     if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE && qrCodes.length) {
       qrCodes.shift();
       let newQrCodes = qrCodes.map(item => ({
-        "key1": item[0],
+        "barcodes": item[0],
         "code": item[1],
-        "date": item[2]
+        "date": item[2],
+        "isUsed": false
       }));
       data.qrCodes = newQrCodes;
     }

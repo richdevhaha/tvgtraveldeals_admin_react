@@ -1,0 +1,50 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaFeatures": { "jsx": true },
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "extends": ["plugin:react/recommended", "prettier"],
+  "plugins": ["react", "@typescript-eslint"],
+  "rules": {
+    "arrow-body-style": 1,
+    "import/named": 0,
+    "import/extensions": [0, "always", { "js": "never", "jsx": "never", "ts": "never", "tsx": "never" }],
+    "import/no-extraneous-dependencies": 0,
+    "import/prefer-default-export": 0,
+    "jsx-a11y/anchor-is-valid": 0,
+    "max-classes-per-file": 0,
+    "no-console": 0,
+    "no-continue": 1,
+    "no-undef": 0,
+    "no-underscore-dangle": 1,
+    "no-unused-expressions": [0, { "allowTernary": true }],
+    "no-unused-vars": 0,
+    "no-prototype-builtins": 1,
+    "no-param-reassign": 0,
+    "no-shadow": 0,
+    "react/display-name": 0,
+    "react/destructuring-assignment": 0,
+    "react/function-component-definition": [0],
+    "react/jsx-filename-extension": [1, { "extensions": [".js", ".jsx", ".ts", ".tsx"] }],
+    "react/jsx-props-no-spreading": 0,
+    "react/no-array-index-key": 0,
+    "react/no-unescaped-entities": 1,
+    "react/no-unstable-nested-components": [1, { "allowAsProps": true, "customValidators": [] }],
+    "react/require-default-props": 0,
+    "react/react-in-jsx-scope": 0
+  },
+  "settings": {
+    "import/resolver": {
+      "node": {
+        "extensions": [".js", ".jsx", ".ts", ".tsx"],
+        "moduleDirectory": ["node_modules", "src/"]
+      }
+    }
+  }
+}

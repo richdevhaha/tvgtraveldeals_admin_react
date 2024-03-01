@@ -54,6 +54,7 @@ import {
   createTicketAction,
   fetchOneTicketAction,
   initCreateFlagsAction,
+  onQrAction,
   updateTicketAction,
 } from "../../redux/ticket/actions";
 import { appColors } from "../../theme";
@@ -73,8 +74,10 @@ export const TicketEdit = () => {
   const isSmallScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("md"));
 
   const idVal = new URLSearchParams(location.search).get("id");
+  const qrData = useSelector((store: any) => store.ticket.items[0]?.Qr);
+  console.log(qrData)
   const { main: errorColor } = appColors.error;
-
+  const [qrShow, setQrShow] = useState(false)
   const [files, setImageFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [qrCodeFiles, setQrCodeFiles] = useState<File[]>([]);
@@ -84,10 +87,9 @@ export const TicketEdit = () => {
   const [previewQRCodeIndex, setPreviewQRCodeIndex] = useState(-1);
   const [highlights, setHighlights] = useState<string[]>([""]);
   const [instructions, setInstructions] = useState<string[]>([""]);
-  const [closingDate, setClosingDate] = useState<ClosingDate[]>([{startDate: "", endDate: ""}])
+  const [closingDate, setClosingDate] = useState<ClosingDate[]>([{ startDate: "", endDate: "" }])
   const [isUploading, setIsUploading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
-
   const { items: currencies } = useSelector(currencySelector);
   const { items: destinations } = useSelector(destinationSelector);
   const { items: tickets, isLoading: ticketLoading, isSucceeded, error } = useSelector(ticketSelector);
@@ -96,6 +98,7 @@ export const TicketEdit = () => {
   const fetchCurrencies = useCallback(() => dispatch(fetchCurrenciesAction()), [dispatch]);
   const fetchDestinations = useCallback(() => dispatch(fetchDestinationsAction()), [dispatch]);
   const createItem = useCallback((data: any) => dispatch(createTicketAction(data)), [dispatch]);
+  const onQr = useCallback((data: any) => dispatch(onQrAction(data)), [dispatch]);
   const createDraftItem = useCallback((data: any) => dispatch(createDraftTicketAction(data)), [dispatch]);
   const updateItem = useCallback((id: string, data: any) => dispatch(updateTicketAction({ id, data })), [dispatch]);
   const initCreateFlags = useCallback(() => dispatch(initCreateFlagsAction()), [dispatch]);
@@ -227,7 +230,14 @@ export const TicketEdit = () => {
       setQrCodes(excelData);
       console.log(excelData);
     };
-
+    qrCodes.shift();
+    let newQrCodes = qrCodes.map(item => ({
+      "barcodes": item[0],
+      "code": item[1],
+      "date": item[2],
+    }));
+    setQrShow(true)
+    onQr(newQrCodes)
     reader.readAsArrayBuffer(file);
   };
 
@@ -280,7 +290,7 @@ export const TicketEdit = () => {
         // setValue("highlights", temp);
         break;
       case "add":
-        const addedVal = [...closingDate.slice(0, index), {startDate: "", endDate: ""}, ...closingDate.slice(index)] as ClosingDate[];
+        const addedVal = [...closingDate.slice(0, index), { startDate: "", endDate: "" }, ...closingDate.slice(index)] as ClosingDate[];
         setClosingDate(addedVal);
         setValue("highlights", addedVal);
         break;
@@ -334,7 +344,7 @@ export const TicketEdit = () => {
       }));
       data.qrCodes = newQrCodes;
     }
-    debugger;
+
     if (files.length > 0) {
       try {
         setLoadingMsg(`Uploading ticket ${isNew ? "" : "added "}images...`);
@@ -360,7 +370,7 @@ export const TicketEdit = () => {
     }
 
     setLoadingMsg(`${isNew ? "Creating new" : "Updating current"} ticket...`);
-    editData.id === "new" ? createItem(data) : updateItem(editData.id, data);
+    editData.id ? createItem(data) : updateItem(editData.id, data);
   };
 
   const saveDraftTicket = async () => {
@@ -1123,6 +1133,30 @@ export const TicketEdit = () => {
                               />
                             </Button>
                           </Box>
+                          {qrShow && (
+                            <>
+                              <h2>Used Codes</h2>
+                              <ul>
+                                {
+                                  qrData.usedCodes.map((item: any) => {
+                                    return (<li key={item.barcodes}>
+                                      <p>{item.barcodes}</p>
+                                    </li>)
+                                  })}
+                              </ul>
+                              <h2>Not Used Codes</h2>
+                              <ul>
+                                {
+                                  qrData.notUsedCodes.map((item: any) => {
+                                    return (
+                                      <li key={item.barcodes}>
+                                        <p>{item.barcodes}</p>
+                                      </li>
+                                    )
+                                  })}
+                              </ul>
+                            </>
+                          )}
                           {/* {qrCodes && (
                             <Box
                               sx={{

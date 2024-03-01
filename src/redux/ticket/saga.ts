@@ -35,13 +35,30 @@ function* createTicket(): any {
     const { payload } = yield take(actions.CREATE_TICKET + START);
     try {
       const { data } = yield axiosClient.post("/ticket", payload);
-
       yield put({ type: actions.CREATE_TICKET + SUCCESS, payload: data.ticket });
       ToastService.showSuccessMessage("New ticket has been created successfully.");
     } catch (error: any) {
       ToastService.showErrorMessage(AppError(error).message);
       yield put({
         type: actions.CREATE_TICKET + FAIL,
+        payload: error.response ? error.response.data : error,
+      });
+    }
+  }
+}
+
+function* onQr(): any {
+  while (true) {
+    const { payload } = yield take(actions.ON_QR + START);
+    try {
+      const { data } = yield axiosClient.post("/ticket/qr", payload);
+      console.log('data: ', data);
+      yield put({ type: actions.ON_QR + SUCCESS, payload: data });
+      // ToastService.showSuccessMessage("New ticket has been created successfully.");
+    } catch (error: any) {
+      ToastService.showErrorMessage(AppError(error).message);
+      yield put({
+        type: actions.ON_QR + FAIL,
         payload: error.response ? error.response.data : error,
       });
     }
@@ -142,6 +159,7 @@ export default function* ticketSaga() {
     fork(fetchTickets),
     fork(fetchOneTicket),
     fork(createTicket),
+    fork(onQr),
     fork(createDraftTicket),
     fork(updateTicket),
     fork(assignFeatureTicket),

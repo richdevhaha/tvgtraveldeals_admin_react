@@ -107,6 +107,28 @@ export const ticketReducer = handleActions<TicketState, any>(
         draft.error = payload;
       }),
 
+    /** ON_QR */
+    [actions.ON_QR + START]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = true;
+        draft.isSucceeded = false;
+        draft.error = undefined;
+      }),
+    [actions.ON_QR + SUCCESS]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = false;
+        draft.isSucceeded = true;
+        draft.items = [payload, ...state.items];
+        draft.error = undefined;
+        draft.total = state.total++;
+      }),
+    [actions.ON_QR + FAIL]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = false;
+        draft.isSucceeded = false;
+        draft.error = payload;
+      }),
+
     /** CREATE_DRAFT_TICKET */
     [actions.CREATE_DRAFT_TICKET + START]: (state, { payload }) =>
       produce(state, (draft) => {

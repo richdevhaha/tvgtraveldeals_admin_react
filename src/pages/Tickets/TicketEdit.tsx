@@ -378,7 +378,7 @@ export const TicketEdit = () => {
     }
 
     setLoadingMsg(`${isNew ? "Creating new" : "Updating current"} ticket...`);
-    editData.id ? createItem(data) : updateItem(editData.id, data);
+    editData.id === "new" ? createItem(data) : updateItem(editData.id, data);
   };
 
   const saveDraftTicket = async () => {

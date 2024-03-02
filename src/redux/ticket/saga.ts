@@ -52,7 +52,6 @@ function* onQr(): any {
     const { payload } = yield take(actions.ON_QR + START);
     try {
       const { data } = yield axiosClient.post("/ticket/qr", payload);
-      console.log(data)
       yield put({ type: actions.ON_QR + SUCCESS, payload: data });
       // ToastService.showSuccessMessage("New ticket has been created successfully.");
     } catch (error: any) {

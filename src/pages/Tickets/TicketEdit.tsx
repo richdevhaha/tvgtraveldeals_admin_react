@@ -104,6 +104,7 @@ export const TicketEdit = () => {
   const initCreateFlags = useCallback(() => dispatch(initCreateFlagsAction()), [dispatch]);
 
   const editData = useMemo(() => {
+    setQrShow(true)
     if (idVal && idVal !== "new") {
       const temp = tickets.filter((one) => one.id == idVal)[0];
       const destination = temp.destination?.id ?? destinations[0].id ?? null;
@@ -206,6 +207,7 @@ export const TicketEdit = () => {
   };
 
   const onAddQRCode = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQrShow(true)
     // if (event.target.files && event.target.files[0]) {
     //   setQrCodeFiles((imgFiles) => [...imgFiles, event.target.files[0]]);
     //   const newData = [...qrCodes, URL.createObjectURL(event.target.files[0])];
@@ -230,21 +232,18 @@ export const TicketEdit = () => {
       setQrCodes(excelData);
       console.log(excelData);
     };
-    if(qrData?.usedCodes.length > 0) setQrShow(true)
-    else setQrShow(false)
     reader.readAsArrayBuffer(file);
   };
 
   useEffect(()=>{
     qrCodes.shift();
-    let newQrCodes = qrCodes.map(item => ({
+    let newQrCodes = qrCodes?.map(item => ({
       "barcodes": item[0],
       "code": item[1],
       "date": item[2],
       "isUsed": false
     }));
-    if(newQrCodes.length>100) ToastService.showErrorMessage("File too large");
-    else onQr(newQrCodes)
+    onQr(newQrCodes)
   },[qrCodes])
 
   const deleteQRCode = (index: number) => {

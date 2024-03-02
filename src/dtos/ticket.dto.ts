@@ -1,5 +1,6 @@
 import {
   ArrayMinSize,
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
@@ -64,6 +65,14 @@ export class StringDto {
   @IsNotEmpty()
   @IsString()
   public content: string;
+}
+
+export class QrDto{
+  @ArrayNotEmpty()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsNotEmpty({ each: true })
+  public qrCodes: any[];
 }
 
 export class CreateTicketDto {

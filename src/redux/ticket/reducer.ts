@@ -15,6 +15,18 @@ export interface TicketState {
   isLoading: boolean;
   error: any;
 }
+export interface QrState {
+  items: any[];
+  isSucceeded: boolean;
+  isLoading: boolean;
+  error: any;
+}
+const initialQrState: QrState = {
+  items: [],
+  isSucceeded: false,
+  isLoading: false,
+  error: undefined,
+};
 
 const initialState: TicketState = {
   items: [],
@@ -26,6 +38,32 @@ const initialState: TicketState = {
   isLoading: false,
   error: undefined,
 };
+
+export const qrReducer = handleActions<QrState, any>(
+  {
+    /** ON_QR */
+    [actions.ON_QR + START]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = true;
+        draft.isSucceeded = false;
+        draft.error = undefined;
+      }),
+    [actions.ON_QR + SUCCESS]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = false;
+        draft.isSucceeded = true;
+        draft.items = [payload, ...state.items];
+      }),
+    [actions.ON_QR + FAIL]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = false;
+        draft.isSucceeded = false;
+        draft.error = payload;
+      }),
+  },
+  initialQrState
+)
+
 
 export const ticketReducer = handleActions<TicketState, any>(
   {
@@ -101,28 +139,6 @@ export const ticketReducer = handleActions<TicketState, any>(
         draft.total = state.total++;
       }),
     [actions.CREATE_TICKET + FAIL]: (state, { payload }) =>
-      produce(state, (draft) => {
-        draft.isLoading = false;
-        draft.isSucceeded = false;
-        draft.error = payload;
-      }),
-
-    /** ON_QR */
-    [actions.ON_QR + START]: (state, { payload }) =>
-      produce(state, (draft) => {
-        draft.isLoading = true;
-        draft.isSucceeded = false;
-        draft.error = undefined;
-      }),
-    [actions.ON_QR + SUCCESS]: (state, { payload }) =>
-      produce(state, (draft) => {
-        draft.isLoading = false;
-        draft.isSucceeded = true;
-        draft.items = [payload, ...state.items];
-        draft.error = undefined;
-        draft.total = state.total++;
-      }),
-    [actions.ON_QR + FAIL]: (state, { payload }) =>
       produce(state, (draft) => {
         draft.isLoading = false;
         draft.isSucceeded = false;

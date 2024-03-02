@@ -6,7 +6,7 @@ import { CurrencyState } from "../redux/currency/reducer";
 import { DashboardState } from "../redux/dashboard/reducer";
 import { DestinationState } from "../redux/destination/reducer";
 import { HelpState } from "../redux/helpRequest/reducer";
-import { TicketState } from "../redux/ticket/reducer";
+import { QrState, TicketState } from "../redux/ticket/reducer";
 import { UiState } from "../redux/ui/reducer";
 import { UserState } from "../redux/user/reducer";
 import { BookingState } from "../redux/booking/reducer";
@@ -21,6 +21,7 @@ type RootReducer = Reducer<
     destination: DestinationState;
     helpRequest: HelpState;
     ticket: TicketState;
+    qr:QrState;
     ui: UiState;
     user: UserState;
     booking: BookingState

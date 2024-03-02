@@ -74,8 +74,8 @@ export const TicketEdit = () => {
   const isSmallScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("md"));
 
   const idVal = new URLSearchParams(location.search).get("id");
-  const qrData = useSelector((store: any) => store.ticket.items[0]?.Qr);
-  console.log(qrData)
+  const qrData = useSelector((store: any) => store.Qr.items[0]?.Qr);
+  const [qrToSend , setQrToSend] = useState([])
   const { main: errorColor } = appColors.error;
   const [qrShow, setQrShow] = useState(false)
   const [files, setImageFiles] = useState<File[]>([]);
@@ -230,16 +230,22 @@ export const TicketEdit = () => {
       setQrCodes(excelData);
       console.log(excelData);
     };
+    if(qrData?.usedCodes.length > 0) setQrShow(true)
+    else setQrShow(false)
+    reader.readAsArrayBuffer(file);
+  };
+
+  useEffect(()=>{
     qrCodes.shift();
     let newQrCodes = qrCodes.map(item => ({
       "barcodes": item[0],
       "code": item[1],
       "date": item[2],
+      "isUsed": false
     }));
-    setQrShow(true)
-    onQr(newQrCodes)
-    reader.readAsArrayBuffer(file);
-  };
+    if(newQrCodes.length>100) ToastService.showErrorMessage("File too large");
+    else onQr(newQrCodes)
+  },[qrCodes])
 
   const deleteQRCode = (index: number) => {
     const one = qrCodes[index];
@@ -324,6 +330,15 @@ export const TicketEdit = () => {
     }
   };
 
+  useEffect(()=>{
+    setQrToSend(qrData?.notUsedCodes?.map((item:any) => ({
+      "barcodes": item.barcodes,
+      "code": item.code,
+      "date": item.date,
+      "isUsed": false
+    })))
+  },[qrData])
+
   const onSubmit = async (data: any) => {
     delete data["id"];
     const isNew = editData.id === "new";
@@ -335,14 +350,7 @@ export const TicketEdit = () => {
     data.instructions = instructions;
 
     if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE && qrCodes.length) {
-      qrCodes.shift();
-      let newQrCodes = qrCodes.map(item => ({
-        "barcodes": item[0],
-        "code": item[1],
-        "date": item[2],
-        "isUsed": false
-      }));
-      data.qrCodes = newQrCodes;
+      data.qrCodes = qrToSend;
     }
 
     if (files.length > 0) {
@@ -1138,7 +1146,7 @@ export const TicketEdit = () => {
                               <h2>Used Codes</h2>
                               <ul>
                                 {
-                                  qrData.usedCodes.map((item: any) => {
+                                  qrData?.usedCodes?.map((item: any) => {
                                     return (<li key={item.barcodes}>
                                       <p>{item.barcodes}</p>
                                     </li>)
@@ -1147,7 +1155,7 @@ export const TicketEdit = () => {
                               <h2>Not Used Codes</h2>
                               <ul>
                                 {
-                                  qrData.notUsedCodes.map((item: any) => {
+                                  qrData?.notUsedCodes?.map((item: any) => {
                                     return (
                                       <li key={item.barcodes}>
                                         <p>{item.barcodes}</p>

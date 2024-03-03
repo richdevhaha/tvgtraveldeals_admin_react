@@ -21,6 +21,11 @@ import {
   Theme,
   Typography,
   useMediaQuery,
+  Table, 
+  TableBody, 
+  TableContainer, 
+  TableHead, 
+  TableRow
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
@@ -43,8 +48,9 @@ import {
   TicketInfoTitle,
   TicketSectionGrid,
   VisuallyHiddenInput,
+  AppTableCell
 } from "../../components";
-import { InfoChangeType, BOOKING_TYPE, WeekType, initInclude, initTicket, STATUS, QR_GENERATION_TYPE } from "../../types";
+import { InfoChangeType, BOOKING_TYPE, WeekType, initInclude, initTicket, STATUS, QR_GENERATION_TYPE, QrCodesToDisplay, QrCode } from "../../types";
 import { CreateTicketDto } from "../../dtos";
 import { currencySelector } from "../../redux/currency/selector";
 import { destinationSelector } from "../../redux/destination/selector";
@@ -75,13 +81,10 @@ export const TicketEdit = () => {
 
   const idVal = new URLSearchParams(location.search).get("id");
   const qrData = useSelector((store: any) => store.Qr.items[0]?.Qr);
-  const [qrToSend , setQrToSend] = useState([])
   const { main: errorColor } = appColors.error;
-  const [qrShow, setQrShow] = useState(false)
   const [files, setImageFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [qrCodeFiles, setQrCodeFiles] = useState<File[]>([]);
-  const [qrCodes, setQrCodes] = useState<string[][]>([])
+  const [qrCodesFromExcel, setQrCodesFromExcel] = useState<QrCode[]>([])
   const [removedOldImages, setRemovedOldImages] = useState<string[]>([]);
   const [previewImageIndex, setPreviewImageIndex] = useState(-1);
   const [previewQRCodeIndex, setPreviewQRCodeIndex] = useState(-1);
@@ -98,13 +101,13 @@ export const TicketEdit = () => {
   const fetchCurrencies = useCallback(() => dispatch(fetchCurrenciesAction()), [dispatch]);
   const fetchDestinations = useCallback(() => dispatch(fetchDestinationsAction()), [dispatch]);
   const createItem = useCallback((data: any) => dispatch(createTicketAction(data)), [dispatch]);
-  const onQr = useCallback((data: any) => dispatch(onQrAction(data)), [dispatch]);
+  const onQr = useCallback((id: string, data: any) => dispatch(onQrAction({ id, data })), [dispatch]);
   const createDraftItem = useCallback((data: any) => dispatch(createDraftTicketAction(data)), [dispatch]);
   const updateItem = useCallback((id: string, data: any) => dispatch(updateTicketAction({ id, data })), [dispatch]);
   const initCreateFlags = useCallback(() => dispatch(initCreateFlagsAction()), [dispatch]);
+  const emptyMsg = "There is no barcode now";
 
   const editData = useMemo(() => {
-    setQrShow(true)
     if (idVal && idVal !== "new") {
       const temp = tickets.filter((one) => one.id == idVal)[0];
       const destination = temp.destination?.id ?? destinations[0].id ?? null;
@@ -207,14 +210,6 @@ export const TicketEdit = () => {
   };
 
   const onAddQRCode = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setQrShow(true)
-    // if (event.target.files && event.target.files[0]) {
-    //   setQrCodeFiles((imgFiles) => [...imgFiles, event.target.files[0]]);
-    //   const newData = [...qrCodes, URL.createObjectURL(event.target.files[0])];
-    //   setQrCodes(newData);
-    //   setValue("images", newData);
-    //   setError("images", {});
-    // }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -226,42 +221,29 @@ export const TicketEdit = () => {
       const workbook = XLSX.read(data, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const excelData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      const excelData:string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-      // Process the excelData as needed
-      setQrCodes(excelData);
-      console.log(excelData);
+      if (excelData.length) {
+        const tempQrdata = excelData.filter(subArray => subArray.length > 0);
+        tempQrdata.shift();
+        let newQrCodes = tempQrdata?.map(item => ({
+          "barcodes": item[0],
+          "type": item[1],
+          "date": item[2],
+          "isUsed": false
+        }));
+        setQrCodesFromExcel(newQrCodes);
+      }
+
     };
     reader.readAsArrayBuffer(file);
   };
 
   useEffect(()=>{
-    qrCodes.shift();
-    let newQrCodes = qrCodes?.map(item => ({
-      "barcodes": item[0],
-      "code": item[1],
-      "date": item[2],
-      "isUsed": false
-    }));
-    onQr(newQrCodes)
-  },[qrCodes])
-
-  const deleteQRCode = (index: number) => {
-    const one = qrCodes[index];
-    if (one.startsWith("http")) {
-      setRemovedOldImages((list) => [...list, one]);
-    }
-
-    let data = [...qrCodes];
-    data.splice(index, 1);
-    setQrCodes(data);
-
-    let temp = [...qrCodeFiles];
-    temp.splice(index, 1);
-    setQrCodeFiles(temp);
-
-    setValue("images", data);
-  };
+    if (editData.id !== "new") {
+      onQr(editData.id, qrCodesFromExcel);
+    } 
+  },[qrCodesFromExcel])
 
   const onChangeHighLights = (type: InfoChangeType, index: number, value: string = "") => {
     switch (type) {
@@ -329,15 +311,6 @@ export const TicketEdit = () => {
     }
   };
 
-  useEffect(()=>{
-    setQrToSend(qrData?.notUsedCodes?.map((item:any) => ({
-      "barcodes": item.barcodes,
-      "code": item.code,
-      "date": item.date,
-      "isUsed": false
-    })))
-  },[qrData])
-
   const onSubmit = async (data: any) => {
     delete data["id"];
     const isNew = editData.id === "new";
@@ -348,8 +321,8 @@ export const TicketEdit = () => {
     data.highlights = highlights;
     data.instructions = instructions;
 
-    if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE && qrCodes.length) {
-      data.qrCodes = qrToSend;
+    if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE) {
+      data.qrCodes = [...qrToDisplay?.usedCodes, ...qrToDisplay?.notUsedCodes];
     }
 
     if (files.length > 0) {
@@ -424,7 +397,6 @@ export const TicketEdit = () => {
       }
     }
 
-    // console.log("draft===>", draft);
     setLoadingMsg(`${isNew ? "Creating new" : "Updating current"} draft ticket...`);
     editData.id === "new" ? createDraftItem(draft) : updateItem(editData.id, draft);
   };
@@ -688,6 +660,37 @@ export const TicketEdit = () => {
       )),
     [instructions, errors]
   );
+  const qrToDisplay = useMemo(
+    () => {
+      if (idVal && idVal !== "new") {
+        let usedCodes:QrCode[] = [];
+        let notUsedCodes:QrCode[] = [];
+        if (editData?.qrCodes.length) {
+          editData?.qrCodes.forEach(el => {
+            if (el.isUsed) {
+              usedCodes.push(el);
+            } else {
+              notUsedCodes.push(el);
+            }
+          });
+        }
+        if (qrData.length) {
+          notUsedCodes = [...notUsedCodes, ...qrData];
+        }
+
+        const temp = {
+          usedCodes: usedCodes,
+          notUsedCodes: notUsedCodes
+        }
+        return temp;
+      } else {
+        return {
+          notUsedCodes: qrCodesFromExcel,
+          usedCodes: []
+        };
+      }
+    }, [editData, qrData, qrCodesFromExcel]
+  )
 
   return (
     <FlexCol sx={{ gap: 2 }}>
@@ -711,31 +714,6 @@ export const TicketEdit = () => {
                 source: one,
                 caption: `Ticket image - ${previewImageIndex + 1}`,
                 alt: `Ticket image - ${previewImageIndex + 1}`,
-                loading: "lazy",
-              }))}
-            />
-          </ImagesModal>
-        </ModalGateway>
-      )}
-      {previewQRCodeIndex > -1 && (
-        <ModalGateway>
-          <ImagesModal onClose={() => setPreviewQRCodeIndex(-1)}>
-            <Carousel
-              currentIndex={previewQRCodeIndex}
-              styles={{
-                // container: (base, state) => ({ backdropFilter: "blur(7px)" }),
-                headerFullscreen: (base, state) => ({ display: "none" }),
-                view: (base, state) => ({
-                  ...base,
-                  ...state,
-                  maxHeight: "95vh",
-                  "&>img": { width: "auto", height: "100%", objectFit: "contain" },
-                }),
-              }}
-              views={qrCodes.map((one, index) => ({
-                source: one,
-                caption: `Ticket image - ${previewQRCodeIndex + 1}`,
-                alt: `Ticket image - ${previewQRCodeIndex + 1}`,
                 loading: "lazy",
               }))}
             />
@@ -1140,77 +1118,79 @@ export const TicketEdit = () => {
                               />
                             </Button>
                           </Box>
-                          {qrShow && (
-                            <>
-                              <h2>Used Codes</h2>
-                              <ul>
-                                {
-                                  qrData?.usedCodes?.map((item: any) => {
-                                    return (<li key={item.barcodes}>
-                                      <p>{item.barcodes}</p>
-                                    </li>)
-                                  })}
-                              </ul>
-                              <h2>Not Used Codes</h2>
-                              <ul>
-                                {
-                                  qrData?.notUsedCodes?.map((item: any) => {
-                                    return (
-                                      <li key={item.barcodes}>
-                                        <p>{item.barcodes}</p>
-                                      </li>
-                                    )
-                                  })}
-                              </ul>
-                            </>
-                          )}
-                          {/* {qrCodes && (
-                            <Box
-                              sx={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: 1,
-                                ".MuiAvatar-root": {
-                                  width: { xs: 75, sm: 100 },
-                                  height: { xs: 75, sm: 100 },
-                                  borderRadius: "6%",
-                                },
-                              }}
-                            >
-                              {qrCodes.map((one, index) => (
-                                <Badge
-                                  key={`image_${index}`}
-                                  overlap="circular"
-                                  anchorOrigin={{ vertical: "top", horizontal: "right" }}
-                                  badgeContent={
-                                    <DeleteIcon
-                                      sx={{ cursor: "pointer", color: "red", width: 20, height: 20 }}
-                                      onClick={() => deleteQRCode(index)}
-                                    />
-                                  }
-                                >
-                                  <Avatar
-                                    src={one}
-                                    alt="name"
-                                    sx={{ cursor: "pointer" }}
-                                    onClick={() => setPreviewQRCodeIndex(index)}
-                                  />
-                                </Badge>
-                              ))}
-                            </Box>
-                          )} */}
                         </FlexRow>
                       }
                     />
                     <FormHelperText>{errors.images?.message}</FormHelperText>
                   </FormControl>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} md={6}>
+                  {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+                    <>
+                      <TicketInfoTitle fontWeight="bold" title={`Used Codes (${qrToDisplay?.usedCodes.length})`} />
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size="small" aria-label="simple table">
+                          <TableHead>
+                            <TableRow>
+                              <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
+                              <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                              <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {qrToDisplay?.usedCodes.length === 0 && (
+                              <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
+                                <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
+                              </TableRow>
+                            )}
+                            {qrToDisplay?.usedCodes.map((row, index) => (
+                              <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                                <AppTableCell value={row.barcodes} isVerticalTop />
+                                <AppTableCell value={row.type} isVerticalTop />
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </>
+                  )}
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} md={6}>
+                  {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+                    <>
+                      <TicketInfoTitle fontWeight="bold" title={`Not Used Codes (${qrToDisplay?.notUsedCodes.length})`} /> 
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size="small" aria-label="simple table">
+                          <TableHead>
+                            <TableRow>
+                              <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
+                              <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                              <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {qrToDisplay?.notUsedCodes.length === 0 && (
+                              <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
+                                <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
+                              </TableRow>
+                            )}
+                            {qrToDisplay?.notUsedCodes.map((row, index) => (
+                              <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                                <AppTableCell value={row.barcodes} isVerticalTop />
+                                <AppTableCell value={row.type} isVerticalTop />
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </>
+                  )}
                 </Grid>
               </>
             )}
+
             <TicketSectionGrid title="Review Information" />
             <Grid item xs={6} md={2.5} lg={2.25} xl={2}>
               <InfoEditBoxWithRef

@@ -58,6 +58,19 @@ export interface Ticket {
   isShowHome: boolean;
   status: STATUS;
   qrCodeGenerationType: string;
+  qrCodes: QrCode[];
+}
+
+export interface QrCodesToDisplay {
+  notUsedCodes: QrCode[];
+  usedCodes: QrCode[];
+}
+
+export interface QrCode {
+  barcodes: string;
+  type: string;
+  date: string;
+  isUsed: boolean;
 }
 
 export const initOpeningHours: OpenHourItem[] = [
@@ -101,5 +114,6 @@ export const initTicket = {
   videoUrl: "",
   isShowHome: true,
   status: STATUS.ACTIVE,
-  qrCodeGenerationType: QR_GENERATION_TYPE.SELF_GENERATION
+  qrCodeGenerationType: QR_GENERATION_TYPE.SELF_GENERATION,
+  qrCodes: []
 };

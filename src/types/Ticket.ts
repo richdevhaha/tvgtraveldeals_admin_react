@@ -24,6 +24,11 @@ export interface OpenHourItem {
   isActive: boolean;
 }
 
+export interface ClosingDate {
+  startDate: "",
+  endDate: ""
+}
+
 export interface LocationItem {
   address: string;
   link: string;
@@ -52,6 +57,8 @@ export interface Ticket {
   highlights: string[];
   instructions: string[];
   openingHours: OpenHourItem[];
+  closingDate: ClosingDate[];
+  timeSlots: string[];
   includes: IncludeItem[];
   location: LocationItem;
   videoUrl: string;
@@ -109,6 +116,8 @@ export const initTicket = {
   highlights: [""],
   instructions: [""],
   openingHours: initOpeningHours,
+  closingDate: [{ startDate: "", endDate: "" }],
+  timeSlots: [""],
   includes: [initInclude],
   location: { address: "", link: "" },
   videoUrl: "",

@@ -1,6 +1,5 @@
 import {
   ArrayMinSize,
-  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
@@ -40,6 +39,17 @@ export class OpenHourDto {
   public isActive: boolean;
 }
 
+export class closingDate {
+  @IsNotEmpty()
+  @IsString()
+  public startDate: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @IsGreaterThanProps("startTime", { message: "End time must be great than Start time" })
+  public endDate: string;
+}
+
 export class IncludeItemDto {
   @IsNotEmpty()
   @IsBoolean()
@@ -65,14 +75,6 @@ export class StringDto {
   @IsNotEmpty()
   @IsString()
   public content: string;
-}
-
-export class QrDto{
-  @ArrayNotEmpty()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(100)
-  @IsNotEmpty({ each: true })
-  public qrCodes: any[];
 }
 
 export class CreateTicketDto {
@@ -195,6 +197,16 @@ export class CreateTicketDto {
   @IsString()
   @IsNotEmpty()
   public qrCodeGenerationType: string;
+
+  @IsArray()
+  // @ValidateNested({ each: true, message: "Invalid closing hour array provided." })
+  @Type(() => closingDate)
+  public closingDate: closingDate[];
+
+  @ArrayNotEmpty()
+  @ArrayMinSize(1)
+  @IsNotEmpty({ each: true })
+  public timeSlots: string[];
 }
 
 export class UpdateTicketDto extends CreateTicketDto {

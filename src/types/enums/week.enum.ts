@@ -1,8 +1,8 @@
 export enum WeekType {
   Sunday,
   Monday,
-  Wednesday,
   Tuesday,
+  Wednesday,
   Thursday,
   Friday,
   Saturday,

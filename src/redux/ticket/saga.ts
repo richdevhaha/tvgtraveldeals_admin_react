@@ -35,6 +35,7 @@ function* createTicket(): any {
     const { payload } = yield take(actions.CREATE_TICKET + START);
     try {
       const { data } = yield axiosClient.post("/ticket", payload);
+
       yield put({ type: actions.CREATE_TICKET + SUCCESS, payload: data.ticket });
       ToastService.showSuccessMessage("New ticket has been created successfully.");
     } catch (error: any) {
@@ -53,7 +54,6 @@ function* onQr(): any {
     try {
       const { data } = yield axiosClient.post(`/ticket/qr/${id}`, rquest);
       yield put({ type: actions.ON_QR + SUCCESS, payload: data });
-      // ToastService.showSuccessMessage("New ticket has been created successfully.");
     } catch (error: any) {
       ToastService.showErrorMessage(AppError(error).message);
       yield put({

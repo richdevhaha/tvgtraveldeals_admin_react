@@ -56,7 +56,7 @@ export default function rootReducer(history: History) {
     destination: persistReducer<any, any>(destinationPersistConfig, destinationReducer),
     helpRequest: helpReducer,
     ticket: persistReducer<any, any>(ticketPersistConfig, ticketReducer),
-    Qr: persistReducer<any,any>(qrPersistConfig,qrReducer),
+    qr: persistReducer<any,any>(qrPersistConfig,qrReducer),
     ui: uiReducer,
     user: userReducer,
     booking: bookingReducer

@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { Box, Button, ButtonGroup, ClickAwayListener, GlobalStyles, Grow, MenuItem, MenuList, Paper, Popper, Table, TableBody, TableContainer, TableHead, TableRow } from "@mui/material";
+import { Box, Button, ButtonGroup, ClickAwayListener, GlobalStyles, Grow, MenuItem, MenuList, Paper, Popper, Table, TableBody, TableContainer, TableHead, TableRow, TablePagination, Theme, useMediaQuery } from "@mui/material";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 
-import { AppCard, AppPageTitle, AppTableCell, AppTextField } from "../../components";
+import { AppCard, AppPageTitle, AppTableCell, AppTextField, TicketAllRowSkeleton } from "../../components";
 import { bookingSelector } from "../../redux/booking/selector";
 import { fetchAllBookingAction } from "../../redux/booking/actions";
+import { Formatter } from "../../utils";
 import { SITE } from "../../config";
 
 export const AllBookings = () => {
+  /** page navigation */
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const isSmallScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("md"));
+
   const dispatch = useDispatch();
   const [search, setSearch] = useState("");
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -24,9 +30,11 @@ export const AllBookings = () => {
   const filteredData = useMemo(() => {
     if (search.length > 0) {
       return items.filter((one) => {
-        let isContain = true;  
-        if (search.length > 0) isContain &&= one.id.toLocaleLowerCase().includes(search.toLocaleLowerCase());  
-        return isContain;
+        const searchLower = search.toLowerCase();
+        const idMatch = one.id.toLowerCase().includes(searchLower);
+        const name = `${one.firstName} ${one.lastName}`.toLowerCase();
+        const nameMatch = name.toLowerCase().includes(searchLower);
+        return idMatch || nameMatch;
       });
     } else {
       return items;
@@ -41,9 +49,25 @@ export const AllBookings = () => {
     const inputDate = new Date(inputDateString);
 
     const options: any = { year: 'numeric', month: 'long', day: 'numeric' };
-    const formattedDate = inputDate.toLocaleDateString('en-US', options);
+    const timePart = inputDateString.toString().split("T")[1];
+    let formattedDate = '';
+    if (timePart === "00:00:00.000Z") {
+      formattedDate = inputDate.toLocaleDateString('en-US', options);
+    } else {
+      formattedDate = inputDate.toLocaleTimeString('en-US', options);
+    }
+    // const formattedDate = inputDate.toLocaleDateString('en-US', options);
 
     return formattedDate;
+  };
+
+  //pagination
+  const handleChangePage = (event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
+    setPage(newPage);
+  };
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
   return (
@@ -55,7 +79,7 @@ export const AllBookings = () => {
           <>
             <AppTextField
               fullWidth={true}
-              placeholder="Search booking by 'BOOKING ID'"
+              placeholder="Search by 'BOOKING ID' or 'NAME'"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               sx={{ mr: 1, width: { xs: "200px", md: "300px" } }}
@@ -70,7 +94,7 @@ export const AllBookings = () => {
         }}
       >
         <TableContainer>
-          <Table sx={{ minWidth: 700 }} aria-label="simple table">
+          <Table sx={{ minWidth: 1050 }} aria-label="simple table">
             <TableHead>
               <TableRow>
                 <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
@@ -86,14 +110,18 @@ export const AllBookings = () => {
               </TableRow>
             </TableHead>
             <TableBody>
+              {items.length === 0 &&
+                isLoading &&
+                Formatter.nArray(5).map((index) => <TicketAllRowSkeleton key={index} />)}
+
               {filteredData.length === 0 && !isLoading && (
                 <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
                   <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
                 </TableRow>
               )}
-              {filteredData.map((row, index) => (
+              {filteredData.slice(page * rowsPerPage, (page + 1) * rowsPerPage).map((row, index) => (
                 <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                  <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                  <AppTableCell scope="row" value={page * rowsPerPage + index + 1} isFirstCell isVerticalTop />
                   <AppTableCell value={row.id} isVerticalTop />
                   <AppTableCell value={row.ticketTitle} isVerticalTop />
                   <AppTableCell value={row.email} isVerticalTop />
@@ -108,6 +136,24 @@ export const AllBookings = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={filteredData.length}
+          page={page}
+          rowsPerPageOptions={[5, 10, 25, 50, 100]}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          labelRowsPerPage={isSmallScreen ? "Rows/page:" : "Rows per page:"}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          sx={{
+            mb: { xs: 4, sm: 0 },
+            color: "white",
+            ".MuiSvgIcon-root": { fill: "white !important" },
+            ".Mui-disabled .MuiSvgIcon-root": { fill: "#00000050 !important" },
+          }}
+          showFirstButton={!isSmallScreen}
+          showLastButton={!isSmallScreen}
+        />
       </AppCard>
     </Box>
   )

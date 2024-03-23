@@ -50,7 +50,7 @@ import {
   VisuallyHiddenInput,
   AppTableCell
 } from "../../components";
-import { InfoChangeType, BOOKING_TYPE, WeekType, initInclude, initTicket, STATUS, QR_GENERATION_TYPE, QrCodesToDisplay, QrCode } from "../../types";
+import { InfoChangeType, BOOKING_TYPE, WeekType, initInclude, initTicket, STATUS, QR_GENERATION_TYPE, QrCode, ClosingDate } from "../../types";
 import { CreateTicketDto } from "../../dtos";
 import { currencySelector } from "../../redux/currency/selector";
 import { destinationSelector } from "../../redux/destination/selector";
@@ -67,8 +67,7 @@ import { appColors } from "../../theme";
 import { AppError, ToastService, uploadFiles } from "../../services";
 import { fetchCurrenciesAction } from "../../redux/currency/actions";
 import { fetchDestinationsAction } from "../../redux/destination/actions";
-import { StringUtil } from "../../utils";
-import { ClosingDate } from "../../types/ClosingDate";
+import { StringUtil, MomentUtil } from "../../utils";
 import * as XLSX from 'xlsx';
 
 const resolver = classValidatorResolver(CreateTicketDto);
@@ -80,17 +79,17 @@ export const TicketEdit = () => {
   const isSmallScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("md"));
 
   const idVal = new URLSearchParams(location.search).get("id");
-  const qrData = useSelector((store: any) => store.Qr.items[0]?.Qr);
+  const qrData = useSelector((store: any) => store.qr?.items[0]?.Qr);
   const { main: errorColor } = appColors.error;
   const [files, setImageFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [qrCodesFromExcel, setQrCodesFromExcel] = useState<QrCode[]>([])
   const [removedOldImages, setRemovedOldImages] = useState<string[]>([]);
   const [previewImageIndex, setPreviewImageIndex] = useState(-1);
-  const [previewQRCodeIndex, setPreviewQRCodeIndex] = useState(-1);
   const [highlights, setHighlights] = useState<string[]>([""]);
   const [instructions, setInstructions] = useState<string[]>([""]);
-  const [closingDate, setClosingDate] = useState<ClosingDate[]>([{ startDate: "", endDate: "" }])
+  const [closingDate, setClosingDate] = useState<ClosingDate[]>([{ startDate: "", endDate: "" }]);
+  const [timeSlots, setTimeSlots] = useState<string[]>([""]);
   const [isUploading, setIsUploading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const { items: currencies } = useSelector(currencySelector);
@@ -106,15 +105,27 @@ export const TicketEdit = () => {
   const updateItem = useCallback((id: string, data: any) => dispatch(updateTicketAction({ id, data })), [dispatch]);
   const initCreateFlags = useCallback(() => dispatch(initCreateFlagsAction()), [dispatch]);
   const emptyMsg = "There is no barcode now";
-
+  
   const editData = useMemo(() => {
     if (idVal && idVal !== "new") {
-      const temp = tickets.filter((one) => one.id == idVal)[0];
+      let temp = tickets.filter((one) => one.id == idVal)[0];
       const destination = temp.destination?.id ?? destinations[0].id ?? null;
       const currency = temp.currency?.id ?? currencies[0].id ?? null;
-
-      setHighlights(temp.highlights);
-      setInstructions(temp.instructions);
+      if (!temp.qrCodeGenerationType) {
+        temp.qrCodeGenerationType = QR_GENERATION_TYPE.SELF_GENERATION;
+      }
+      if (temp.highlights?.length) {
+        setHighlights(temp.highlights);
+      }
+      if (temp.instructions?.length) {
+        setInstructions(temp.instructions);
+      }
+      if (temp.closingDate?.length) {
+        setClosingDate(temp.closingDate);
+      }
+      if (temp.timeSlots?.length) {
+        setTimeSlots(temp.timeSlots);
+      }
       return { ...temp, destination, currency };
     }
 
@@ -267,24 +278,48 @@ export const TicketEdit = () => {
     }
   };
 
-  const onChangeCloseDate = (type: InfoChangeType, index: number, value: string = "") => {
+  const onChangeCloseDate = (type: InfoChangeType, index: number, value: string = "", rangeType: string = "") => {
     switch (type) {
       case "change":
         const temp = [...closingDate];
-        // temp[index] = value;
-        // setHighlights(temp);
-        // setError("highlights", {});
-        // setValue("highlights", temp);
+        temp[index] = {
+          ...temp[index], // Spread the properties of the object
+          [rangeType]: value
+        };
+        setClosingDate(temp);
+        setValue("closingDate", temp);
         break;
       case "add":
         const addedVal = [...closingDate.slice(0, index), { startDate: "", endDate: "" }, ...closingDate.slice(index)] as ClosingDate[];
         setClosingDate(addedVal);
-        setValue("highlights", addedVal);
+        setValue("closingDate", addedVal);
         break;
       case "remove":
         const removedVal = [...closingDate.slice(0, index), ...closingDate.slice(index + 1)];
         setClosingDate(removedVal);
-        setValue("highlights", removedVal);
+        setValue("closingDate", removedVal);
+        break;
+    }
+  };
+
+  const onChangeTimeSlots = (type: InfoChangeType, index: number, value: string = "") => {
+    switch (type) {
+      case "change":
+        const temp = [...timeSlots];
+        temp[index] = value;
+        setTimeSlots(temp);
+        setError("timeSlots", {});
+        setValue("timeSlots", temp);
+        break;
+      case "add":
+        const addedVal = [...timeSlots.slice(0, index), "", ...timeSlots.slice(index)];
+        setTimeSlots(addedVal);
+        setValue("timeSlots", addedVal);
+        break;
+      case "remove":
+        const removedVal = [...timeSlots.slice(0, index), ...timeSlots.slice(index + 1)];
+        setTimeSlots(removedVal);
+        setValue("timeSlots", removedVal);
         break;
     }
   };
@@ -315,11 +350,15 @@ export const TicketEdit = () => {
     delete data["id"];
     const isNew = editData.id === "new";
     setIsUploading(true);
-
     const highlights = data.highlights.filter((one: string) => one.length > 0);
     const instructions = data.instructions.filter((one: string) => one.length > 0);
+    const closingDate = data.closingDate.filter((one: ClosingDate) => one.startDate !== "" && one.endDate !== "");
+    const timeSlots = data.timeSlots.filter((one: string) => one.length > 0);
+
     data.highlights = highlights;
     data.instructions = instructions;
+    data.closingDate = closingDate;
+    data.timeSlots = timeSlots.sort((a: string, b: string) => MomentUtil.timeToMinutes(a) - MomentUtil.timeToMinutes(b));
 
     if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE) {
       data.qrCodes = [...qrToDisplay?.usedCodes, ...qrToDisplay?.notUsedCodes];
@@ -363,8 +402,16 @@ export const TicketEdit = () => {
     }
     const highlights = draft.highlights.filter((one: string) => one.length > 0);
     const instructions = draft.instructions.filter((one: string) => one.length > 0);
+    const closingDate = draft.closingDate.filter((one: ClosingDate) => one.startDate !== "" && one.endDate !== "");
+    const timeSlots = draft.timeSlots.filter((one: string) => one.length > 0);
     draft.highlights = highlights;
     draft.instructions = instructions;
+    draft.closingDate = closingDate;
+    draft.timeSlots = timeSlots;
+
+    if (draft.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE) {
+      draft.qrCodes = [...qrToDisplay?.usedCodes, ...qrToDisplay?.notUsedCodes];
+    }
 
     draft["status"] = STATUS.DRAFT;
     const isNew = editData.id === "new";
@@ -409,22 +456,26 @@ export const TicketEdit = () => {
           <FlexRow sx={{ gap: 0.5 }}>
             <TextField
               type="date"
+              // type="datetime-local"
               size="small"
               label=""
               variant="outlined"
+              value={one.startDate}
               sx={AppTextFieldSX()}
-              error={!!errors.openingHours && !!errors.openingHours[dateIndex]?.startTime}
-              {...register(`openingHours.${dateIndex}.startTime`)}
+              {...register(`closingDate.${dateIndex}.startDate`)}
+              onChange={(e) => onChangeCloseDate("change", dateIndex, e.target.value as string, "startDate")}
             />
             <Typography sx={{ mt: 0.5, color: "white" }}>-</Typography>
             <TextField
               type="date"
+              // type="datetime-local"
               size="small"
               label=""
               variant="outlined"
+              value={one.endDate}
               sx={AppTextFieldSX()}
-              error={!!errors.openingHours && !!errors.openingHours[dateIndex]?.endTime}
-              {...register(`openingHours.${dateIndex}.endTime`)}
+              {...register(`closingDate.${dateIndex}.endDate`)}
+              onChange={(e) => onChangeCloseDate("change", dateIndex, e.target.value as string, "endDate")}
             />
             <Box sx={{ gap: 0.5, display: "flex", flexDirection: "row" }}>
               <Button
@@ -660,12 +711,13 @@ export const TicketEdit = () => {
       )),
     [instructions, errors]
   );
+
   const qrToDisplay = useMemo(
     () => {
       if (idVal && idVal !== "new") {
         let usedCodes:QrCode[] = [];
         let notUsedCodes:QrCode[] = [];
-        if (editData?.qrCodes.length) {
+        if (editData?.qrCodes && editData?.qrCodes?.length) {
           editData?.qrCodes.forEach(el => {
             if (el.isUsed) {
               usedCodes.push(el);
@@ -674,7 +726,7 @@ export const TicketEdit = () => {
             }
           });
         }
-        if (qrData.length) {
+        if (qrData && qrData?.length) {
           notUsedCodes = [...notUsedCodes, ...qrData];
         }
 
@@ -690,7 +742,51 @@ export const TicketEdit = () => {
         };
       }
     }, [editData, qrData, qrCodesFromExcel]
-  )
+  );
+
+  const TimeSlotsRows = useMemo(
+    () =>
+      timeSlots.map((one, timeIndex) => (
+        <FlexCol key={timeIndex}>
+          <FlexRow sx={{ gap: 0.5 }}>
+            <TextField
+              type="time"
+              size="small"
+              label=""
+              variant="outlined"
+              value={one}
+              sx={AppTextFieldSX()}
+              error={!!errors.timeSlots && !!errors.timeSlots[timeIndex]}
+              {...register(`timeSlots.${timeIndex}`)}
+              onChange={(e) => onChangeTimeSlots("change", timeIndex, e.target.value as string)}
+            />
+            <Box sx={{ gap: 0.5, display: "flex", flexDirection: "row" }}>
+              <Button
+                variant="contained"
+                color="error"
+                size="small"
+                onClick={() => onChangeTimeSlots("remove", timeIndex)}
+                disabled={timeSlots.length === 1}
+              >
+                <RemoveIcon sx={{ width: 20, height: 20 }} />
+              </Button>
+              <Button
+                variant="contained"
+                color="light"
+                size="small"
+                onClick={() => onChangeTimeSlots("add", timeIndex + 1)}
+              >
+                <AddIcon sx={{ width: 20, height: 20 }} />
+              </Button>
+            </Box>
+          </FlexRow>
+          {errors.timeSlots && (
+            <FormHelperText sx={{ ml: 0.5, color: errorColor }}>{errors.timeSlots.message}</FormHelperText>
+          )}
+        </FlexCol>
+      )),
+    [timeSlots, errors]
+  );
 
   return (
     <FlexCol sx={{ gap: 2 }}>
@@ -1058,138 +1154,147 @@ export const TicketEdit = () => {
               <TicketInfoTitle title="Closed Date *" />
               <Box sx={{ gap: 1, display: "flex", flexDirection: "column" }}>{ClosingDateRow}</Box>
             </Grid>
-
-            <TicketSectionGrid title="QR Codes" />
-            <Grid item xs={12} md={5} lg={4} xl={3}>
-              <TicketInfoTitle title="QR Code Generation Type *" />
-              <FormControl error={!!errors.qrCodeGenerationType} variant="standard" fullWidth>
-                <Controller
-                  control={control}
-                  rules={{ required: true }}
-                  name="qrCodeGenerationType"
-                  defaultValue={editData.qrCodeGenerationType}
-                  render={({ field: { onChange, ...field } }) => (
-                    <RadioGroup
-                      row
-                      aria-labelledby="qr-codes-label"
-                      sx={{ ml: 2, color: "white", justifyContent: { xs: "left", sm: "left" } }}
-                      {...field}
-                    >
-                      <FormControlLabel
-                        value={QR_GENERATION_TYPE.SELF_GENERATION}
-                        control={<Radio color="light" value={QR_GENERATION_TYPE.SELF_GENERATION} onChange={(e) => onChange(QR_GENERATION_TYPE.SELF_GENERATION)} />}
-                        label="Self-Generation"
-                      />
-                      <FormControlLabel
-                        value={QR_GENERATION_TYPE.UPLOADING_QR_CODE}
-                        control={<Radio color="light" value={QR_GENERATION_TYPE.UPLOADING_QR_CODE} onChange={(e) => onChange(QR_GENERATION_TYPE.UPLOADING_QR_CODE)} />}
-                        label="Uploading QR codes"
-                      />
-                    </RadioGroup>
-                  )}
-                />
-                {errors.qrCodeGenerationType && <FormHelperText sx={{ mt: 0 }}>{errors.qrCodeGenerationType.message}</FormHelperText>}
-              </FormControl>
+            <Grid item sm={12} md={6}>
+              <TicketInfoTitle title="Time Slot *" />
+              <Box sx={{ gap: 1, display: "flex", flexDirection: "column" }}>{TimeSlotsRows}</Box>
             </Grid>
-            {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+
+            {watch("bookingType") === BOOKING_TYPE.DIRECTLY && (
               <>
-                <Grid item xs={12} md={7} lg={8} xl={9} sx={{ display: "flex", flexDirection: "column" }}>
-                  <FormControl error={!!errors.images} variant="standard">
-                    <InfoEditBoxWithRef
-                      isRequired
-                      title="QR Code Images"
-                      isSelect
-                      selectItem={
-                        <FlexRow sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 2 }}>
-                          <Box>
-                            <Button
-                              component="label"
-                              variant="contained"
-                              size="small"
-                              color="light"
-                              startIcon={<CloudUploadIcon />}
-                              sx={{ width: "max-content" }}
-                            >
-                              Upload QR Code
-                              <VisuallyHiddenInput
-                                type="file"
-                                accept=".xlsx"
-                                onChange={onAddQRCode}
-                              />
-                            </Button>
-                          </Box>
-                        </FlexRow>
-                      }
+                <TicketSectionGrid title="QR Codes" />
+                <Grid item xs={12} md={5} lg={4} xl={3}>
+                  <TicketInfoTitle title="QR Code Generation Type *" />
+                  <FormControl error={!!errors.qrCodeGenerationType} variant="standard" fullWidth>
+                    <Controller
+                      control={control}
+                      rules={{ required: true }}
+                      name="qrCodeGenerationType"
+                      defaultValue={editData.qrCodeGenerationType}
+                      render={({ field: { onChange, ...field } }) => (
+                        <RadioGroup
+                          row
+                          aria-labelledby="qr-codes-label"
+                          sx={{ ml: 2, color: "white", justifyContent: { xs: "left", sm: "left" } }}
+                          {...field}
+                        >
+                          <FormControlLabel
+                            value={QR_GENERATION_TYPE.SELF_GENERATION}
+                            control={<Radio color="light" value={QR_GENERATION_TYPE.SELF_GENERATION} onChange={(e) => onChange(QR_GENERATION_TYPE.SELF_GENERATION)} />}
+                            label="Self-Generation"
+                          />
+                          <FormControlLabel
+                            value={QR_GENERATION_TYPE.UPLOADING_QR_CODE}
+                            control={<Radio color="light" value={QR_GENERATION_TYPE.UPLOADING_QR_CODE} onChange={(e) => onChange(QR_GENERATION_TYPE.UPLOADING_QR_CODE)} />}
+                            label="Uploading QR codes"
+                          />
+                        </RadioGroup>
+                      )}
                     />
-                    <FormHelperText>{errors.images?.message}</FormHelperText>
+                    {errors.qrCodeGenerationType && <FormHelperText sx={{ mt: 0 }}>{errors.qrCodeGenerationType.message}</FormHelperText>}
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
-                    <>
-                      <TicketInfoTitle fontWeight="bold" title={`Used Codes (${qrToDisplay?.usedCodes.length})`} />
-                      <TableContainer sx={{ maxHeight: 400 }}>
-                        <Table size="small" aria-label="simple table">
-                          <TableHead>
-                            <TableRow>
-                              <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
-                              <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
-                              <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {qrToDisplay?.usedCodes.length === 0 && (
-                              <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
-                                <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
-                              </TableRow>
-                            )}
-                            {qrToDisplay?.usedCodes.map((row, index) => (
-                              <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                                <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
-                                <AppTableCell value={row.barcodes} isVerticalTop />
-                                <AppTableCell value={row.type} isVerticalTop />
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    </>
-                  )}
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
-                    <>
-                      <TicketInfoTitle fontWeight="bold" title={`Not Used Codes (${qrToDisplay?.notUsedCodes.length})`} /> 
-                      <TableContainer sx={{ maxHeight: 400 }}>
-                        <Table size="small" aria-label="simple table">
-                          <TableHead>
-                            <TableRow>
-                              <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
-                              <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
-                              <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {qrToDisplay?.notUsedCodes.length === 0 && (
-                              <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
-                                <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
-                              </TableRow>
-                            )}
-                            {qrToDisplay?.notUsedCodes.map((row, index) => (
-                              <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                                <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
-                                <AppTableCell value={row.barcodes} isVerticalTop />
-                                <AppTableCell value={row.type} isVerticalTop />
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    </>
-                  )}
-                </Grid>
+                {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+                  <>
+                    <Grid item xs={12} md={7} lg={8} xl={9} sx={{ display: "flex", flexDirection: "column" }}>
+                      <FormControl error={!!errors.images} variant="standard">
+                        <InfoEditBoxWithRef
+                          isRequired
+                          title="QR Code Images"
+                          isSelect
+                          selectItem={
+                            <FlexRow sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 2 }}>
+                              <Box>
+                                <Button
+                                  component="label"
+                                  variant="contained"
+                                  size="small"
+                                  color="light"
+                                  startIcon={<CloudUploadIcon />}
+                                  sx={{ width: "max-content" }}
+                                >
+                                  Upload QR Code
+                                  <VisuallyHiddenInput
+                                    type="file"
+                                    accept=".xlsx"
+                                    onChange={onAddQRCode}
+                                  />
+                                </Button>
+                              </Box>
+                            </FlexRow>
+                          }
+                        />
+                        <FormHelperText>{errors.images?.message}</FormHelperText>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+                        <>
+                          <TicketInfoTitle fontWeight="bold" title={`Used Codes (${qrToDisplay?.usedCodes.length})`} />
+                          <TableContainer sx={{ maxHeight: 400 }}>
+                            <Table size="small" aria-label="simple table">
+                              <TableHead>
+                                <TableRow>
+                                  <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
+                                  <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                                  <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {qrToDisplay?.usedCodes.length === 0 && (
+                                  <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
+                                    <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
+                                  </TableRow>
+                                )}
+                                {qrToDisplay?.usedCodes.map((row, index) => (
+                                  <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                    <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                                    <AppTableCell value={row.barcodes} isVerticalTop />
+                                    <AppTableCell value={row.type} isVerticalTop />
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </>
+                      )}
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+                        <>
+                          <TicketInfoTitle fontWeight="bold" title={`Not Used Codes (${qrToDisplay?.notUsedCodes.length})`} /> 
+                          <TableContainer sx={{ maxHeight: 400 }}>
+                            <Table size="small" aria-label="simple table">
+                              <TableHead>
+                                <TableRow>
+                                  <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
+                                  <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                                  <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {qrToDisplay?.notUsedCodes.length === 0 && (
+                                  <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
+                                    <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
+                                  </TableRow>
+                                )}
+                                {qrToDisplay?.notUsedCodes.map((row, index) => (
+                                  <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                    <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                                    <AppTableCell value={row.barcodes} isVerticalTop />
+                                    <AppTableCell value={row.type} isVerticalTop />
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </>
+                      )}
+                    </Grid>
+                  </>
+                )}
               </>
             )}
+
 
             <TicketSectionGrid title="Review Information" />
             <Grid item xs={6} md={2.5} lg={2.25} xl={2}>

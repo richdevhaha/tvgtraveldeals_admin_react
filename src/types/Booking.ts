@@ -19,4 +19,6 @@ export interface Booking {
   infantPrice: number;
   bookingDate: string;
   ticketTitle: string;
+  bookingType: string;
+  ticketFileUrl: string;
 }

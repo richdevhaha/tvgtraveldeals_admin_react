@@ -6,6 +6,7 @@ import authSaga from "./auth/saga";
 import currencySaga from "./currency/saga";
 import dashboardSaga from "./dashboard/saga";
 import destinationSaga from "./destination/saga";
+import blogSaga from "./blog/saga";
 import helpSaga from "./helpRequest/saga";
 import ticketSaga from "./ticket/saga";
 import userSaga from "./user/saga";
@@ -19,6 +20,7 @@ export default function* rootSaga(dispatch: Dispatch) {
     fork(currencySaga),
     fork(dashboardSaga),
     fork(destinationSaga),
+    fork(blogSaga),
     fork(helpSaga),
     fork(ticketSaga),
     fork(uiSaga),

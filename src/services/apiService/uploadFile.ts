@@ -9,3 +9,14 @@ export const uploadFiles = async ({ url, files, folder = "" }: any) => {
   const { data } = await axiosClientForm.post(url, formData);
   return data;
 };
+
+export const uploadOneFile = async ({ url, file, folder = "", id = "" }: any) => {
+  const formData = new FormData();
+
+  formData.append(`file`, file);
+  folder && formData.append("folder", folder);
+  id && formData.append("id", id);
+
+  const { data } = await axiosClientForm.post(url, formData);
+  return data;
+};

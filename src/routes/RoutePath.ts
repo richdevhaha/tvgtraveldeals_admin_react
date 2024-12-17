@@ -17,4 +17,5 @@ export const RoutePath = {
 
   profile: "/profile",
   adminUsers: "/admin-users",
+  editBlog: "/blogs/edit-blog",
 };

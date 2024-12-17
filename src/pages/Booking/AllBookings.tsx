@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { Box, Button, ButtonGroup, ClickAwayListener, GlobalStyles, Grow, MenuItem, MenuList, Paper, Popper, Table, TableBody, TableContainer, TableHead, TableRow, TablePagination, Theme, useMediaQuery } from "@mui/material";
-import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
-import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import { Box, Button, Chip, GlobalStyles, Table, TableBody, TableContainer, TableHead, TableRow, TablePagination, Theme, useMediaQuery, Typography } from "@mui/material";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 
-import { AppCard, AppPageTitle, AppTableCell, AppTextField, TicketAllRowSkeleton } from "../../components";
+import { AppCard, AppPageTitle, AppTableCell, AppTextField, FlexCol, TicketAllRowSkeleton, VisuallyHiddenInput } from "../../components";
 import { bookingSelector } from "../../redux/booking/selector";
 import { fetchAllBookingAction } from "../../redux/booking/actions";
 import { Formatter } from "../../utils";
-import { SITE } from "../../config";
+import { Booking } from "../../types/Booking";
+import { AppError, ToastService, uploadOneFile } from "../../services";
 
 export const AllBookings = () => {
   /** page navigation */
@@ -21,7 +18,6 @@ export const AllBookings = () => {
 
   const dispatch = useDispatch();
   const [search, setSearch] = useState("");
-  const anchorRef = useRef<HTMLDivElement>(null);
   const emptyMsg = "There is no booking now"
 
   const { items, isLoading, isSucceeded } = useSelector(bookingSelector);
@@ -59,6 +55,20 @@ export const AllBookings = () => {
     // const formattedDate = inputDate.toLocaleDateString('en-US', options);
 
     return formattedDate;
+  };
+
+  const totalAmount = (row: Booking) => {
+    const totalPrice = row.adultPrice*row.adultCount + row.childPrice*row.childCount + row.seniorPrice*row.seniorCount + row.infantCount*row.infantCount;
+    return Number(totalPrice.toFixed(2));
+  }
+  
+  const onUploadTicket = async (event: any, id: string) => {
+    if (event.target.files && event.target.files[0]) {
+      const ticket = event.target.files[0];
+      const folder = "bookingTickets";
+      const {booking} = await uploadOneFile({ url: "/upload/bookingTicket", file: ticket, folder: folder, id: id });
+      fetchAllBooking();
+    }
   };
 
   //pagination
@@ -107,6 +117,8 @@ export const AllBookings = () => {
                 <AppTableCell value="Child" isTitle sx={{ width: { sm: 40, md: 60 } }} />
                 <AppTableCell value="Senior" isTitle sx={{ width: { sm: 40, md: 60 } }} />
                 <AppTableCell value="Infant" isTitle sx={{ width: { sm: 40, md: 60 } }} />
+                <AppTableCell value="Amount" isTitle sx={{ width: { sm: 40, md: 60 } }} />
+                <AppTableCell value="Booking Type" isTitle sx={{ width: { sm: 120, md: 140 } }} />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -131,6 +143,38 @@ export const AllBookings = () => {
                   <AppTableCell value={row.childCount} isVerticalTop align="center"/>
                   <AppTableCell value={row.seniorCount} isVerticalTop align="center"/>
                   <AppTableCell value={row.infantCount} isVerticalTop align="center"/>
+                  <AppTableCell value={totalAmount(row)} isVerticalTop align="center"/>
+                  <AppTableCell 
+                    value={
+                      row.bookingType === "affiliate_link" || !row.bookingType
+                        ? "Affiliate link" 
+                        : row.bookingType === "directly" 
+                          ? "Directly" 
+                          : row.bookingType === "manual_confirm" 
+                            ?  <FlexCol>
+                                <Typography sx={{fontSize: { xs: 12, sm: 14 }}}>Manual Confirm</Typography>
+                                {row.ticketFileUrl ?
+                                  <Chip color="warning" size="small" label="Ticket Uploaded" /> :
+                                  <Button
+                                    component="label"
+                                    variant="contained"
+                                    size="small"
+                                    color="light"
+                                    startIcon={<CloudUploadIcon />}
+                                    sx={{ width: "max-content", fontSize: 11, paddingX: '8px', paddingY: '2px' }}
+                                  >
+                                    Upload Ticket
+                                    <VisuallyHiddenInput
+                                      type="file"
+                                      accept="application/pdf"
+                                      onChange={(event) => onUploadTicket(event, row.id)}
+                                    />
+                                  </Button>
+                                } 
+                               </FlexCol>
+                            : ""
+                    } 
+                    isVerticalTop/>
                 </TableRow>
               ))}
             </TableBody>

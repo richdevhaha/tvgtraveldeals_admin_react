@@ -10,8 +10,9 @@ import { uiReducer } from "./ui/reducer";
 import { authReducer } from "./auth/reducer";
 import { dashboardReducer } from "./dashboard/reducer";
 import { destinationReducer } from "./destination/reducer";
+import { blogReducer } from "./blog/reducer";
 import { currencyReducer } from "./currency/reducer";
-import { qrReducer, ticketReducer } from "./ticket/reducer";
+import { qrReducer, barcodeReducer, ticketReducer } from "./ticket/reducer";
 import { helpReducer } from "./helpRequest/reducer";
 import { userReducer } from "./user/reducer";
 import { bookingReducer } from "./booking/reducer";
@@ -34,6 +35,12 @@ const destinationPersistConfig = {
   whitelist: ["items"],
 };
 
+const blogPersistConfig = {
+  key: "blog",
+  storage,
+  whitelist: ["items"],
+};
+
 const ticketPersistConfig = {
   key: "ticket",
   storage,
@@ -46,6 +53,12 @@ const qrPersistConfig = {
   whitelist: ["items"],
 };
 
+const barcodePersistConfig = {
+  key: "barcode",
+  storage,
+  whitelist: ["items"],
+};
+
 export default function rootReducer(history: History) {
   return combineReducers<RootState>({
     router: connectRouter(history),
@@ -54,9 +67,11 @@ export default function rootReducer(history: History) {
     currency: persistReducer<any, any>(currencyPersistConfig, currencyReducer),
     dashboard: dashboardReducer,
     destination: persistReducer<any, any>(destinationPersistConfig, destinationReducer),
+    blog: persistReducer<any, any>(blogPersistConfig, blogReducer),
     helpRequest: helpReducer,
     ticket: persistReducer<any, any>(ticketPersistConfig, ticketReducer),
     qr: persistReducer<any,any>(qrPersistConfig,qrReducer),
+    barcode: persistReducer<any,any>(barcodePersistConfig,barcodeReducer),
     ui: uiReducer,
     user: userReducer,
     booking: bookingReducer

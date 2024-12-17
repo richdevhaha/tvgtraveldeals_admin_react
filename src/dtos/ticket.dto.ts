@@ -15,6 +15,7 @@ import {
   Min,
   NotEquals,
   ValidateNested,
+  ValidateIf 
 } from "class-validator";
 import { Type } from "class-transformer";
 import { BOOKING_TYPE, STATUS } from "../types";
@@ -39,7 +40,73 @@ export class OpenHourDto {
   public isActive: boolean;
 }
 
+// export class PricingTierDto  {
+//   @IsNotEmpty()
+//   @IsNumber()
+//   public day: number;
+
+//   @IsNotEmpty()
+//   @IsNumber()
+//   public rate: number;
+// }
+
 export class closingDate {
+  @IsNotEmpty()
+  @IsString()
+  public startDate: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @IsGreaterThanProps("startTime", { message: "End time must be great than Start time" })
+  public endDate: string;
+}
+
+export class coupon {
+  @IsNotEmpty()
+  @IsBoolean()
+  public isActive: boolean;
+
+  @IsNotEmpty()
+  @IsString()
+  public discountType: string;
+  
+  @IsNotEmpty()
+  @IsString()
+  public expireType: string;
+
+  @IsNotEmpty()
+  @IsString()
+  public value: string;
+
+  @IsNotEmpty()
+  @IsString()
+  public code: string;
+
+  @IsNotEmpty()
+  @IsString()
+  public startDate: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @IsGreaterThanProps("startTime", { message: "End time must be great than Start time" })
+  public endDate: string;
+}
+
+export class barcode {
+  @IsNotEmpty()
+  @IsString()
+  public activeDate: string;
+}
+
+export class discount {
+  @IsNotEmpty()
+  @IsBoolean()
+  public isActive: boolean;
+
+  @IsNotEmpty()
+  @IsString()
+  public value: string;
+
   @IsNotEmpty()
   @IsString()
   public startDate: string;
@@ -108,6 +175,36 @@ export class CreateTicketDto {
   @Min(0)
   public infantPrice: number;
 
+  @IsNotEmpty()
+  @IsBoolean()
+  public isWeekendPrice: boolean;
+
+  @IsNumber()
+  @IsNotEmpty()
+  @Min(0)
+  @IsPositive()
+  @NotEquals(0)
+  @ValidateIf((object, value) => object.isWeekendPrice === true)
+  public weekendPrice: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  @Min(0)
+  @ValidateIf((object, value) => object.isWeekendPrice === true)
+  public weekendChildPrice: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  @Min(0)
+  @ValidateIf((object, value) => object.isWeekendPrice === true)
+  public weekendSeniorPrice: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  @Min(0)
+  @ValidateIf((object, value) => object.isWeekendPrice === true)
+  public weekendInfantPrice: number;
+
   @IsString()
   @IsNotEmpty()
   public currency: string;
@@ -171,6 +268,10 @@ export class CreateTicketDto {
   @Type(() => OpenHourDto)
   public openingHours: OpenHourDto[];
 
+  // @IsArray()
+  // @Type(() => PricingTierDto)
+  // public pricingTiers: PricingTierDto[];
+
   @IsArray()
   @ValidateNested({ each: true, message: "Invalid includes array provided." })
   @ArrayMinSize(1)
@@ -190,6 +291,12 @@ export class CreateTicketDto {
   @IsBoolean()
   public isShowHome: boolean;
 
+  @IsBoolean()
+  public isTopActivity: boolean;
+
+  @IsBoolean()
+  public isTopCategory: boolean;
+
   @IsEnum(STATUS, { message: "Invalid status provided." })
   @IsNotEmpty()
   public status: STATUS;
@@ -202,6 +309,13 @@ export class CreateTicketDto {
   // @ValidateNested({ each: true, message: "Invalid closing hour array provided." })
   @Type(() => closingDate)
   public closingDate: closingDate[];
+
+  @IsArray()
+  @Type(() => coupon)
+  public coupon: coupon[];
+
+  @Type(() => discount)
+  public discount: discount;
 
   @ArrayNotEmpty()
   @ArrayMinSize(1)

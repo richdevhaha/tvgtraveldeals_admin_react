@@ -3,6 +3,7 @@ import Carousel, { Modal as ImagesModal, ModalGateway } from "react-images";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { saveAs } from 'file-saver';
 import { classValidatorResolver } from "@hookform/resolvers/class-validator";
 import {
   Avatar,
@@ -29,6 +30,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import DeleteIcon from "@mui/icons-material/Delete";
 import RemoveIcon from "@mui/icons-material/Remove";
 import SaveIcon from "@mui/icons-material/Save";
@@ -50,7 +52,7 @@ import {
   VisuallyHiddenInput,
   AppTableCell
 } from "../../components";
-import { InfoChangeType, BOOKING_TYPE, WeekType, initInclude, initTicket, STATUS, QR_GENERATION_TYPE, QrCode, ClosingDate } from "../../types";
+import { InfoChangeType, BOOKING_TYPE, WeekType, initInclude, initTicket, initCoupon, initDiscount, STATUS, QR_GENERATION_TYPE, QrCode, Barcode, ClosingDate, CouponItem, DISCOUNT_TYPE, EXPIRE_TYPE, Discount } from "../../types";
 import { CreateTicketDto } from "../../dtos";
 import { currencySelector } from "../../redux/currency/selector";
 import { destinationSelector } from "../../redux/destination/selector";
@@ -61,6 +63,7 @@ import {
   fetchOneTicketAction,
   initCreateFlagsAction,
   onQrAction,
+  onBarcodeAction,
   updateTicketAction,
 } from "../../redux/ticket/actions";
 import { appColors } from "../../theme";
@@ -80,15 +83,20 @@ export const TicketEdit = () => {
 
   const idVal = new URLSearchParams(location.search).get("id");
   const qrData = useSelector((store: any) => store.qr?.items[0]?.Qr);
+  const barcodeData = useSelector((store: any) => store.barcode?.items[0]?.Barcode);
   const { main: errorColor } = appColors.error;
   const [files, setImageFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [qrCodesFromExcel, setQrCodesFromExcel] = useState<QrCode[]>([])
+  const [qrCodesFromExcel, setQrCodesFromExcel] = useState<QrCode[]>([]);
+  const [barCodesFromExcel, setBarcodesFromExcel] = useState<Barcode[]>([]);
   const [removedOldImages, setRemovedOldImages] = useState<string[]>([]);
   const [previewImageIndex, setPreviewImageIndex] = useState(-1);
   const [highlights, setHighlights] = useState<string[]>([""]);
   const [instructions, setInstructions] = useState<string[]>([""]);
   const [closingDate, setClosingDate] = useState<ClosingDate[]>([{ startDate: "", endDate: "" }]);
+  const [coupon, setCoupon] = useState<CouponItem[]>([initCoupon]);
+  // const [barcode, setBarcode] = useState<BarcodeItem[]>([initBarcode]);
+  const [discount, setDiscount] = useState<Discount>(initDiscount);
   const [timeSlots, setTimeSlots] = useState<string[]>([""]);
   const [isUploading, setIsUploading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
@@ -101,6 +109,7 @@ export const TicketEdit = () => {
   const fetchDestinations = useCallback(() => dispatch(fetchDestinationsAction()), [dispatch]);
   const createItem = useCallback((data: any) => dispatch(createTicketAction(data)), [dispatch]);
   const onQr = useCallback((id: string, data: any) => dispatch(onQrAction({ id, data })), [dispatch]);
+  const onBarcode = useCallback((id: string, data: any) => dispatch(onBarcodeAction({ id, data })), [dispatch]);
   const createDraftItem = useCallback((data: any) => dispatch(createDraftTicketAction(data)), [dispatch]);
   const updateItem = useCallback((id: string, data: any) => dispatch(updateTicketAction({ id, data })), [dispatch]);
   const initCreateFlags = useCallback(() => dispatch(initCreateFlagsAction()), [dispatch]);
@@ -123,8 +132,36 @@ export const TicketEdit = () => {
       if (temp.closingDate?.length) {
         setClosingDate(temp.closingDate);
       }
+
+      if (temp.coupon?.length) {
+        setCoupon(temp.coupon);
+      }
+      if (temp.discount) {
+        setDiscount(temp.discount);
+      }
       if (temp.timeSlots?.length) {
         setTimeSlots(temp.timeSlots);
+      }
+      // if (!temp.pricingTiers?.length) {
+      //   temp.pricingTiers = initTicket.pricingTiers;
+      // }
+      if (!temp.openingHours?.length) {
+        temp.openingHours = initTicket.openingHours;
+      }
+      if (temp.isWeekendPrice == null) {
+        temp.isWeekendPrice = false;
+      }
+      if (temp.weekendPrice == null) {
+        temp.weekendPrice = 0;
+      }
+      if (temp.weekendChildPrice == null) {
+        temp.weekendChildPrice = 0;
+      }
+      if (temp.weekendSeniorPrice == null) {
+        temp.weekendSeniorPrice = 0;
+      }
+      if (temp.weekendInfantPrice == null) {
+        temp.weekendInfantPrice = 0;
       }
       return { ...temp, destination, currency };
     }
@@ -154,7 +191,7 @@ export const TicketEdit = () => {
   } = useForm<CreateTicketDto>({ resolver, defaultValues: { ...editData } });
 
   const { fields: hoursFields } = useFieldArray({ control, name: "openingHours" });
-
+  // const { fields: pricingTiersFields } = useFieldArray({ control, name: "pricingTiers" });
   const {
     fields: includesFields,
     insert: includesInsert,
@@ -241,9 +278,47 @@ export const TicketEdit = () => {
           "barcodes": item[0],
           "type": item[1],
           "date": item[2],
-          "isUsed": false
+          "isUsed": false,
+          "usedEmail": '',
+          "questFirstName": '',
+          "questLastName": ''
         }));
         setQrCodesFromExcel(newQrCodes);
+      }
+
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const onAddBarcode = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (!event.target?.result) return;
+
+      const data = new Uint8Array(event.target.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const excelData:string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+      if (excelData.length) {
+        const tempBarcodedata = excelData.filter(subArray => subArray.length > 0);
+        tempBarcodedata.shift();
+        tempBarcodedata[0]
+        let newBarcodes = tempBarcodedata?.map(item => ({
+          "barcodes": item[0],
+          "type": item[1],
+          "date": StringUtil.convertExcelDate(item[2]),
+          "isUsed": false,
+          "usedEmail": '',
+          "questFirstName": '',
+          "questLastName": ''
+        }));
+
+        setBarcodesFromExcel(newBarcodes);
       }
 
     };
@@ -255,6 +330,12 @@ export const TicketEdit = () => {
       onQr(editData.id, qrCodesFromExcel);
     } 
   },[qrCodesFromExcel])
+
+  useEffect(()=>{
+    if (editData.id !== "new") {
+      onBarcode(editData.id, barCodesFromExcel);
+    } 
+  },[barCodesFromExcel])
 
   const onChangeHighLights = (type: InfoChangeType, index: number, value: string = "") => {
     switch (type) {
@@ -322,6 +403,90 @@ export const TicketEdit = () => {
         setValue("timeSlots", removedVal);
         break;
     }
+  }
+
+  const onChangeCoupon = (type: InfoChangeType, index: number, target: string = "", value: any = "") => {
+    switch (type) {
+      case "change":
+        const temp: CouponItem[] = [...coupon];
+        switch (target) {
+          case 'isActive':
+            temp[index].isActive = value as unknown as boolean;
+            break;
+          case 'discountType':
+            temp[index].discountType = value as DISCOUNT_TYPE;
+            break;
+          case 'expireType':
+            temp[index].expireType = value as EXPIRE_TYPE;
+            break;
+          case 'value':
+            temp[index].value = value as string;
+            break;
+          case 'code':
+            temp[index].code = value as string;
+            break;
+          default:
+            console.error(`Unknown property: ${target}`);
+        }
+        temp[index][target] = value;
+        setCoupon(temp);
+        setError("coupon", {});
+        setValue("coupon", temp);
+        break;
+      case "add":
+        let tempInite = JSON.parse(JSON.stringify(initCoupon));
+        tempInite.code = StringUtil.generateRandomCode();
+        tempInite.value = 0;
+        const addedVal = [...coupon.slice(0, index), tempInite, ...coupon.slice(index)];
+        setCoupon(addedVal);
+        setValue("coupon", addedVal);
+        break;
+      case "remove":
+        const removedVal = [...coupon.slice(0, index), ...coupon.slice(index + 1)];
+        setCoupon(removedVal);
+        setValue("coupon", removedVal);
+        break;
+    }
+  };
+
+  // const onChangeBarcode = (type: InfoChangeType, index: number, target: string = "", value: any = "") => {
+  //   switch (type) {
+  //     case "change":
+  //       const temp: BarcodeItem[] = [...barcode];
+  //       switch (target) {
+  //         case 'activeDate':
+  //           temp[index].activeDate = value as string;
+  //           break;
+  //         default:
+  //           console.error(`Unknown property: ${target}`);
+  //       }
+  //       temp[index][target] = value;
+  //       setBarcode(temp);
+  //       setError("barcode", {});
+  //       setValue("barcode", temp);
+  //       break;
+  //     case "add":
+  //       let tempInite = JSON.parse(JSON.stringify(initBarcode));
+  //       tempInite.code = StringUtil.generateRandomCode();
+  //       tempInite.value = 0;
+  //       const addedVal = [...barcode.slice(0, index), tempInite, ...barcode.slice(index)];
+  //       setBarcode(addedVal);
+  //       setValue("barcode", addedVal);
+  //       break;
+  //     case "remove":
+  //       const removedVal = [...barcode.slice(0, index), ...barcode.slice(index + 1)];
+  //       setBarcode(removedVal);
+  //       setValue("barcode", removedVal);
+  //       break;
+  //   }
+  // };
+
+  const onChangeDiscount = (target: string = "", value: any = "") => {
+    const temp = discount;
+    temp[target] = value;
+    setDiscount(temp);
+    setError("discount", {});
+    setValue("discount", temp);
   };
 
   const onChangeInstructions = (type: InfoChangeType, index: number, value: string = "") => {
@@ -360,8 +525,12 @@ export const TicketEdit = () => {
     data.closingDate = closingDate;
     data.timeSlots = timeSlots.sort((a: string, b: string) => MomentUtil.timeToMinutes(a) - MomentUtil.timeToMinutes(b));
 
-    if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE) {
+    if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODES) {
       data.qrCodes = [...qrToDisplay?.usedCodes, ...qrToDisplay?.notUsedCodes];
+    }
+
+    if (data.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_BAR_CODES) {
+      data.barcodes = [...barcodeToDisplay?.usedCodes, ...barcodeToDisplay?.notUsedCodes];
     }
 
     if (files.length > 0) {
@@ -409,8 +578,12 @@ export const TicketEdit = () => {
     draft.closingDate = closingDate;
     draft.timeSlots = timeSlots;
 
-    if (draft.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODE) {
+    if (draft.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_QR_CODES) {
       draft.qrCodes = [...qrToDisplay?.usedCodes, ...qrToDisplay?.notUsedCodes];
+    }
+
+    if (draft.qrCodeGenerationType === QR_GENERATION_TYPE.UPLOADING_BAR_CODES) {
+      draft.barcodes = [...barcodeToDisplay?.usedCodes, ...barcodeToDisplay?.notUsedCodes];
     }
 
     draft["status"] = STATUS.DRAFT;
@@ -447,6 +620,27 @@ export const TicketEdit = () => {
     setLoadingMsg(`${isNew ? "Creating new" : "Updating current"} draft ticket...`);
     editData.id === "new" ? createDraftItem(draft) : updateItem(editData.id, draft);
   };
+
+  const handleDownloadBarcode = () => {
+    const data = editData?.barcodes;
+
+    // Convert JSON data to worksheet
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    // Create a new workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+    // Write the workbook and convert to binary string
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: 'xlsx',
+      type: 'array'
+    });
+
+    // Create a Blob from the Excel buffer and save it using file-saver
+    const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+    saveAs(blob, 'barcode.xlsx');
+  }
 
   /** looping closing date rows for adding, removing */
   const ClosingDateRow = useMemo(
@@ -506,6 +700,126 @@ export const TicketEdit = () => {
         </FlexCol>
       )),
     [closingDate, errors]
+  );
+
+  const CouponRow = useMemo(
+    () =>
+      coupon?.map((one, couponIndex) => (
+        <Grid item xs={12} container spacing={2} columnSpacing={2} key={couponIndex} sx={{ marginBottom: 1, marginTop: 1 }}>
+          <Grid item xs={2} lg={1} >
+            <TicketInfoTitle title="Status" component={"p"} />
+            <Checkbox
+              size="small"
+              color="light"
+              sx={{ p: 0 }}
+              checked={one.isActive}
+              onChange={(e) => onChangeCoupon("change", couponIndex, "isActive", e.target.checked as unknown as boolean)}
+            />
+          </Grid>
+          <Grid item xs={5} lg={1}>
+            <TicketInfoTitle title="Value" component={"p"} />
+            <TextField
+              type="number"
+              size="small"
+              label=""
+              variant="outlined"
+              value={one.value}
+              sx={AppTextFieldSX()}
+              error={!!errors.coupon && !!errors.coupon[couponIndex]?.value}
+              {...register(`coupon.${couponIndex}.value`)}
+              onChange={(e) => onChangeCoupon("change", couponIndex, "value", e.target.value as string)}
+            />
+          </Grid>
+          <Grid item xs={5} lg={1}>
+            <TicketInfoTitle title="Code" component={"p"} />
+            <TextField
+              disabled
+              type="text"
+              size="small"
+              label=""
+              variant="outlined"
+              value={one.code}
+              sx={AppTextFieldSX()}
+              error={!!errors.coupon && !!errors.coupon[couponIndex]?.code}
+              {...register(`coupon.${couponIndex}.code`)}
+              // onChange={(e) => onChangeCoupon("change", couponIndex, "value", e.target.value as string)}
+            />
+          </Grid>
+          <Grid item xs={6} lg={2}>
+            <TicketInfoTitle title="Discount Type" />
+            <AppSelect
+              value={one.discountType}
+              onChange={(e) => onChangeCoupon("change", couponIndex, "discountType", e.target.value as string)}
+              sx={{ fontSize: 14 }}
+            >
+              <MenuItem value={DISCOUNT_TYPE.PERCENT}>Percent</MenuItem>
+              <MenuItem value={DISCOUNT_TYPE.FIXED_AMOUNT}>Fixed Amount</MenuItem>
+            </AppSelect>
+          </Grid>
+          <Grid item xs={6} lg={2}>
+            <TicketInfoTitle title="Expire Type" />
+            <AppSelect
+              value={one.expireType}
+              onChange={(e) => onChangeCoupon("change", couponIndex, "expireType", e.target.value as string)}
+              sx={{ fontSize: 14 }}
+            >
+              <MenuItem value={EXPIRE_TYPE.ONE_TIME}>One Time</MenuItem>
+              <MenuItem value={EXPIRE_TYPE.MULTI_USE}>Multi-Use</MenuItem>
+            </AppSelect>
+          </Grid>
+          <Grid item xs={9} lg={3}>
+            <TicketInfoTitle title="Enable Date" />
+            <FlexRow sx={{ gap: 0.5 }}>
+              <TextField
+                type="date"
+                // type="datetime-local"
+                size="small"
+                label=""
+                variant="outlined"
+                value={one.startDate}
+                sx={AppTextFieldSX()}
+                {...register(`coupon.${couponIndex}.startDate`)}
+                onChange={(e) => onChangeCoupon("change", couponIndex, "startDate", e.target.value as string)}
+              />
+              <Typography sx={{ mt: 0.5, color: "white" }}>-</Typography>
+              <TextField
+                type="date"
+                // type="datetime-local"
+                size="small"
+                label=""
+                variant="outlined"
+                value={one.endDate}
+                sx={AppTextFieldSX()}
+                {...register(`coupon.${couponIndex}.endDate`)}
+                onChange={(e) => onChangeCoupon("change", couponIndex, "endDate", e.target.value as string)}
+              />
+            </FlexRow>
+          </Grid>
+          <Grid item xs={3} lg={2}>
+            <TicketInfoTitle title="Action" />
+            <Box sx={{ gap: 0.5, display: "flex", flexDirection: "row" }}>
+              <Button
+                variant="contained"
+                color="error"
+                size="small"
+                onClick={() => onChangeCoupon("remove", couponIndex)}
+                disabled={coupon.length === 1}
+              >
+                <RemoveIcon sx={{ width: 20, height: 20 }} />
+              </Button>
+              <Button
+                variant="contained"
+                color="light"
+                size="small"
+                onClick={() => onChangeCoupon("add", couponIndex + 1)}
+              >
+                <AddIcon sx={{ width: 20, height: 20 }} />
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
+      )),
+    [coupon, errors]
   );
 
   const OpenHoursRows = useMemo(
@@ -568,6 +882,34 @@ export const TicketEdit = () => {
       )),
     [hoursFields, errors]
   );
+
+  // const PricingTiersRows = useMemo(
+  //   () =>
+  //     pricingTiersFields.map((one, pricingTierIndex) => (
+  //       <FlexCol key={pricingTierIndex}>
+  //         <FlexRow sx={{ gap: 0.5 }}>
+  //           <Typography sx={{ mt: 0.5, color: "white", width: 90, fontSize: 13  }}>{ WeekType[pricingTierIndex] }</Typography>
+  //           <TextField
+  //             type="number"
+  //             size="small"
+  //             label=""
+  //             variant="outlined"
+  //             style={{ width: 100 }}
+  //             sx={AppTextFieldSX()}
+  //             error={!!errors.pricingTiers && !!errors.pricingTiers[pricingTierIndex]?.rate}
+  //             {...register(`pricingTiers.${pricingTierIndex}.rate`)}
+  //           />
+  //         </FlexRow>
+
+  //         {errors.pricingTiers && errors.pricingTiers[pricingTierIndex] && (
+  //           <FormHelperText sx={{ ml: 0.5, color: errorColor }}>
+  //             {errors.pricingTiers && errors.pricingTiers[pricingTierIndex]?.rate?.message}
+  //           </FormHelperText>
+  //         )}
+  //       </FlexCol>
+  //     )),
+  //   [pricingTiersFields, errors]
+  // );
 
   const IncludeRows = useMemo(
     () =>
@@ -744,6 +1086,38 @@ export const TicketEdit = () => {
     }, [editData, qrData, qrCodesFromExcel]
   );
 
+  const barcodeToDisplay = useMemo(
+    () => {
+      if (idVal && idVal !== "new") {
+        let usedCodes:Barcode[] = [];
+        let notUsedCodes:Barcode[] = [];
+        if (editData?.barcodes && editData?.barcodes?.length) {
+          editData?.barcodes.forEach(el => {
+            if (el.isUsed) {
+              usedCodes.push(el);
+            } else {
+              notUsedCodes.push(el);
+            }
+          });
+        }
+        if (barcodeData && barcodeData?.length) {
+          notUsedCodes = [...notUsedCodes, ...barcodeData];
+        }
+
+        const temp = {
+          usedCodes: usedCodes,
+          notUsedCodes: notUsedCodes
+        }
+        return temp;
+      } else {
+        return {
+          notUsedCodes: barCodesFromExcel,
+          usedCodes: []
+        };
+      }
+    }, [editData, barcodeData, barCodesFromExcel]
+  );
+
   const TimeSlotsRows = useMemo(
     () =>
       timeSlots.map((one, timeIndex) => (
@@ -781,12 +1155,93 @@ export const TicketEdit = () => {
             </Box>
           </FlexRow>
           {errors.timeSlots && (
-            <FormHelperText sx={{ ml: 0.5, color: errorColor }}>{errors.timeSlots.message}</FormHelperText>
+            <FormHelperText sx={{ ml: 0.5, color: errorColor }}>
+              Each value in time slot should not be empty
+              {/* {errors.timeSlots.message} */}
+            </FormHelperText>
           )}
         </FlexCol>
       )),
     [timeSlots, errors]
   );
+
+  // const BarcodeRow = useMemo(
+  //   () =>
+  //     barcode?.map((one, barcodeIndex) => (
+  //       <Grid item xs={12} container spacing={2} columnSpacing={2} key={barcodeIndex} sx={{ marginBottom: 1, marginTop: 1 }}>
+  //         <Grid item xs={4} lg={4}>
+  //           <TicketInfoTitle title="Active Date" />
+  //           <Box sx={{ gap: 0.5 }}>
+  //             <TextField
+  //               type="date"
+  //               // type="datetime-local"
+  //               size="small"
+  //               label=""
+  //               variant="outlined"
+  //               value={one.activeDate}
+  //               sx={AppTextFieldSX()}
+  //               {...register(`barcode.${barcodeIndex}.activeDate`)}
+  //               onChange={(e) => onChangeBarcode("change", barcodeIndex, "activeDate", e.target.value as string)}
+  //             />
+  //           </Box>
+  //         </Grid>
+  //         <Grid item xs={5} lg={3} sx={{ display: "flex", flexDirection: "column" }}>
+  //           <FormControl error={!!errors.images} variant="standard">
+  //             <InfoEditBoxWithRef
+  //               isRequired
+  //               title="QR Code Texts"
+  //               isSelect
+  //               selectItem={
+  //                 <FlexRow sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 2 }}>
+  //                   <Box>
+  //                     <Button
+  //                       component="label"
+  //                       variant="contained"
+  //                       size="small"
+  //                       color="light"
+  //                       startIcon={<CloudUploadIcon />}
+  //                       sx={{ width: "max-content" }}
+  //                     >
+  //                       Upload QR Code
+  //                       <VisuallyHiddenInput
+  //                         type="file"
+  //                         accept=".xlsx"
+  //                         onChange={onAddBarcode}
+  //                       />
+  //                     </Button>
+  //                   </Box>
+  //                 </FlexRow>
+  //               }
+  //             />
+  //             <FormHelperText>{errors.images?.message}</FormHelperText>
+  //           </FormControl>
+  //         </Grid>
+  //         <Grid item xs={3} lg={3}>
+  //           <TicketInfoTitle title="Action" />
+  //           <Box sx={{ gap: 0.5, display: "flex", flexDirection: "row" }}>
+  //             <Button
+  //               variant="contained"
+  //               color="error"
+  //               size="small"
+  //               onClick={() => onChangeBarcode("remove", barcodeIndex)}
+  //               disabled={barcode.length === 1}
+  //             >
+  //               <RemoveIcon sx={{ width: 20, height: 20 }} />
+  //             </Button>
+  //             <Button
+  //               variant="contained"
+  //               color="light"
+  //               size="small"
+  //               onClick={() => onChangeBarcode("add", barcodeIndex + 1)}
+  //             >
+  //               <AddIcon sx={{ width: 20, height: 20 }} />
+  //             </Button>
+  //           </Box>
+  //         </Grid>
+  //       </Grid>
+  //     )),
+  //   [barcode, errors]
+  // );
 
   return (
     <FlexCol sx={{ gap: 2 }}>
@@ -798,8 +1253,8 @@ export const TicketEdit = () => {
               currentIndex={previewImageIndex}
               styles={{
                 // container: (base, state) => ({ backdropFilter: "blur(7px)" }),
-                headerFullscreen: (base, state) => ({ display: "none" }),
-                view: (base, state) => ({
+                headerFullscreen: (base: any, state: any) => ({ display: "none" }),
+                view: (base: any, state: any) => ({
                   ...base,
                   ...state,
                   maxHeight: "95vh",
@@ -920,6 +1375,11 @@ export const TicketEdit = () => {
                             control={<Radio color="light" value={BOOKING_TYPE.DIRECTLY} />}
                             label="Directly"
                           />
+                          <FormControlLabel
+                            value={BOOKING_TYPE.MANUAL_CONFIRM}
+                            control={<Radio color="light" value={BOOKING_TYPE.MANUAL_CONFIRM} />}
+                            label="Manual Confirm"
+                          />
                         </RadioGroup>
                       )}
                     />
@@ -941,7 +1401,7 @@ export const TicketEdit = () => {
                 />
               )}
 
-              {watch("bookingType") === BOOKING_TYPE.DIRECTLY && (
+              {(watch("bookingType") === BOOKING_TYPE.DIRECTLY || watch("bookingType") === BOOKING_TYPE.MANUAL_CONFIRM) && (
                 <Grid container spacing={2} columnSpacing={2}>
                   <Grid item xs={4}>
                     <InfoEditBoxWithRef
@@ -973,6 +1433,77 @@ export const TicketEdit = () => {
                       {...register("infantPrice", { valueAsNumber: true })}
                     />
                   </Grid>
+
+                  <Grid item xs={12}>
+                    <Controller
+                      control={control}
+                      rules={{ required: true }}
+                      name={`isWeekendPrice`}
+                      render={({ field: { onChange, ...field } }) => (
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              inputProps={{ "aria-label": "Weekend Price" }}
+                              size="small"
+                              color="light"
+                              checked={getValues(`isWeekendPrice`)}
+                              onChange={(e) => setValue(`isWeekendPrice`, e.target.checked)}
+                              {...field}
+                            />
+                          }
+                          label="Weekend Price"
+                          sx={{
+                            color: "white",
+                            ".MuiTypography-root": { fontSize: { xs: 12, sm: 14 }, ml: 0.5 },
+                          }}
+                        />
+                      )}
+                    />
+                    </Grid>
+                  {(watch("isWeekendPrice")) && (
+                    <Grid item xs={12} container spacing={2} columnSpacing={2}>
+                      <Grid item xs={3}>
+                        <InfoEditBoxWithRef
+                          title="Adult Price"
+                          isRequired
+                          type="number"
+                          error={!!errors.weekendPrice}
+                          helperText={errors.weekendPrice?.message}
+                          {...register("weekendPrice", { valueAsNumber: true })}
+                        />
+                      </Grid>
+                      <Grid item xs={3}>
+                        <InfoEditBoxWithRef
+                          title="Child Price"
+                          isRequired
+                          type="number"
+                          error={!!errors.weekendChildPrice}
+                          helperText={errors.weekendChildPrice?.message}
+                          {...register("weekendChildPrice", { valueAsNumber: true })}
+                        />
+                      </Grid>
+                      <Grid item xs={3}>
+                        <InfoEditBoxWithRef
+                          title="Senior Price"
+                          isRequired
+                          type="number"
+                          error={!!errors.weekendSeniorPrice}
+                          helperText={errors.weekendSeniorPrice?.message}
+                          {...register("weekendSeniorPrice", { valueAsNumber: true })}
+                        />
+                      </Grid>
+                      <Grid item xs={3}>
+                        <InfoEditBoxWithRef
+                          title="Infant Price"
+                          isRequired
+                          type="number"
+                          error={!!errors.weekendInfantPrice}
+                          helperText={errors.weekendInfantPrice?.message}
+                          {...register("weekendInfantPrice", { valueAsNumber: true })}
+                        />
+                      </Grid>
+                    </Grid>
+                   )}
                 </Grid>
               )}
             </Grid>
@@ -1158,11 +1689,15 @@ export const TicketEdit = () => {
               <TicketInfoTitle title="Time Slot *" />
               <Box sx={{ gap: 1, display: "flex", flexDirection: "column" }}>{TimeSlotsRows}</Box>
             </Grid>
+            {/* <Grid item sm={12} md={6}>
+              <TicketInfoTitle title="Pricingng Tier *" />
+              <Box sx={{ gap: 1, display: "flex", flexDirection: "column", ml: 3 }}>{PricingTiersRows}</Box>
+            </Grid> */}
 
-            {watch("bookingType") === BOOKING_TYPE.DIRECTLY && (
+            {(watch("bookingType") === BOOKING_TYPE.DIRECTLY) && (
               <>
                 <TicketSectionGrid title="QR Codes" />
-                <Grid item xs={12} md={5} lg={4} xl={3}>
+                <Grid item xs={12}>
                   <TicketInfoTitle title="QR Code Generation Type *" />
                   <FormControl error={!!errors.qrCodeGenerationType} variant="standard" fullWidth>
                     <Controller
@@ -1183,9 +1718,14 @@ export const TicketEdit = () => {
                             label="Self-Generation"
                           />
                           <FormControlLabel
-                            value={QR_GENERATION_TYPE.UPLOADING_QR_CODE}
-                            control={<Radio color="light" value={QR_GENERATION_TYPE.UPLOADING_QR_CODE} onChange={(e) => onChange(QR_GENERATION_TYPE.UPLOADING_QR_CODE)} />}
+                            value={QR_GENERATION_TYPE.UPLOADING_QR_CODES}
+                            control={<Radio color="light" value={QR_GENERATION_TYPE.UPLOADING_QR_CODES} onChange={(e) => onChange(QR_GENERATION_TYPE.UPLOADING_QR_CODES)} />}
                             label="Uploading QR codes"
+                          />
+                          <FormControlLabel
+                            value={QR_GENERATION_TYPE.UPLOADING_BAR_CODES}
+                            control={<Radio color="light" value={QR_GENERATION_TYPE.UPLOADING_BAR_CODES} onChange={(e) => onChange(QR_GENERATION_TYPE.UPLOADING_BAR_CODES)} />}
+                            label="Uploading Bar codes"
                           />
                         </RadioGroup>
                       )}
@@ -1193,13 +1733,13 @@ export const TicketEdit = () => {
                     {errors.qrCodeGenerationType && <FormHelperText sx={{ mt: 0 }}>{errors.qrCodeGenerationType.message}</FormHelperText>}
                   </FormControl>
                 </Grid>
-                {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+                {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODES && (
                   <>
-                    <Grid item xs={12} md={7} lg={8} xl={9} sx={{ display: "flex", flexDirection: "column" }}>
+                    <Grid item xs={12} sx={{ display: "flex", flexDirection: "column" }}>
                       <FormControl error={!!errors.images} variant="standard">
                         <InfoEditBoxWithRef
                           isRequired
-                          title="QR Code Images"
+                          title="QR Code Texts"
                           isSelect
                           selectItem={
                             <FlexRow sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 2 }}>
@@ -1227,7 +1767,7 @@ export const TicketEdit = () => {
                       </FormControl>
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
+                      {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODES && (
                         <>
                           <TicketInfoTitle fontWeight="bold" title={`Used Codes (${qrToDisplay?.usedCodes.length})`} />
                           <TableContainer sx={{ maxHeight: 400 }}>
@@ -1237,6 +1777,8 @@ export const TicketEdit = () => {
                                   <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
                                   <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
                                   <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                                  <AppTableCell value="Used Email" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                                  <AppTableCell value="Guest Name" isTitle sx={{ width: { sm: 150, md: 200 } }} />
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -1250,6 +1792,11 @@ export const TicketEdit = () => {
                                     <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
                                     <AppTableCell value={row.barcodes} isVerticalTop />
                                     <AppTableCell value={row.type} isVerticalTop />
+                                    <AppTableCell value={row.usedEmail} isVerticalTop />
+                                    { row.questFirstName ?
+                                      <AppTableCell value={row.questFirstName + ' ' + row.questLastName} isVerticalTop /> : 
+                                      <AppTableCell value={''} isVerticalTop />
+                                    }
                                   </TableRow>
                                 ))}
                               </TableBody>
@@ -1259,42 +1806,209 @@ export const TicketEdit = () => {
                       )}
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_QR_CODE && (
-                        <>
-                          <TicketInfoTitle fontWeight="bold" title={`Not Used Codes (${qrToDisplay?.notUsedCodes.length})`} /> 
-                          <TableContainer sx={{ maxHeight: 400 }}>
-                            <Table size="small" aria-label="simple table">
-                              <TableHead>
-                                <TableRow>
-                                  <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
-                                  <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
-                                  <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {qrToDisplay?.notUsedCodes.length === 0 && (
-                                  <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
-                                    <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
-                                  </TableRow>
-                                )}
-                                {qrToDisplay?.notUsedCodes.map((row, index) => (
-                                  <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                                    <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
-                                    <AppTableCell value={row.barcodes} isVerticalTop />
-                                    <AppTableCell value={row.type} isVerticalTop />
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        </>
-                      )}
+                      <TicketInfoTitle fontWeight="bold" title={`Not Used Codes (${qrToDisplay?.notUsedCodes.length})`} /> 
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size="small" aria-label="simple table">
+                          <TableHead>
+                            <TableRow>
+                              <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
+                              <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                              <AppTableCell value="Type" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {qrToDisplay?.notUsedCodes.length === 0 && (
+                              <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
+                                <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
+                              </TableRow>
+                            )}
+                            {qrToDisplay?.notUsedCodes.map((row, index) => (
+                              <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                                <AppTableCell value={row.barcodes} isVerticalTop />
+                                <AppTableCell value={row.type} isVerticalTop />
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Grid>
+                  </>
+                )}
+                {watch("qrCodeGenerationType") === QR_GENERATION_TYPE.UPLOADING_BAR_CODES && (
+                  <>
+                    <Grid item xs={12} sx={{ display: "flex", flexDirection: "column" }}>
+                      <FormControl error={!!errors.images} variant="standard">
+                        <InfoEditBoxWithRef
+                          isRequired
+                          title="Barcode Texts"
+                          isSelect
+                          selectItem={
+                            <FlexRow sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 2 }}>
+                              <Box>
+                                <Button
+                                  component="label"
+                                  variant="contained"
+                                  size="small"
+                                  color="light"
+                                  startIcon={<CloudUploadIcon />}
+                                  sx={{ width: "max-content" }}
+                                >
+                                  Upload Barcode
+                                  <VisuallyHiddenInput
+                                    type="file"
+                                    accept=".xlsx"
+                                    onChange={onAddBarcode}
+                                  />
+                                </Button>
+                              </Box>
+                              <Button 
+                                variant="contained" 
+                                size="small" 
+                                color="success"
+                                startIcon={<CloudDownloadIcon />} 
+                                onClick={handleDownloadBarcode}
+                              >
+                                Download Barcode
+                              </Button>
+                            </FlexRow>
+                          }
+                        />
+                        <FormHelperText>{errors.images?.message}</FormHelperText>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TicketInfoTitle fontWeight="bold" title={`Used Codes (${barcodeToDisplay?.usedCodes.length})`} />
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size="small" aria-label="simple table">
+                          <TableHead>
+                            <TableRow>
+                              <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
+                              <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                              <AppTableCell value="Type" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                              <AppTableCell value="Date" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                              <AppTableCell value="Used Email" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                              <AppTableCell value="Guest Name" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {barcodeToDisplay?.usedCodes.length === 0 && (
+                              <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
+                                <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
+                              </TableRow>
+                            )}
+                            {barcodeToDisplay?.usedCodes.map((row, index) => (
+                              <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                                <AppTableCell value={row.barcodes} isVerticalTop />
+                                <AppTableCell value={row.type} isVerticalTop />
+                                <AppTableCell value={MomentUtil.getDateStr(row.date, "MM/DD/YYYY")} isVerticalTop />
+                                <AppTableCell value={row.usedEmail} isVerticalTop />
+                                { row.questFirstName ?
+                                  <AppTableCell value={row.questFirstName + ' ' + row.questLastName} isVerticalTop /> : 
+                                  <AppTableCell value={''} isVerticalTop />
+                                }
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TicketInfoTitle fontWeight="bold" title={`Not Used Codes (${barcodeToDisplay?.notUsedCodes.length})`} /> 
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size="small" aria-label="simple table">
+                          <TableHead>
+                            <TableRow>
+                              <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 30, sm: 50 } }} />
+                              <AppTableCell value="Barcodes" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                              <AppTableCell value="Type" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                              <AppTableCell value="Date" isTitle sx={{ width: { sm: 150, md: 200 } }} />
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {barcodeToDisplay?.notUsedCodes.length === 0 && (
+                              <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
+                                <AppTableCell value={emptyMsg} sx={{ py: 3 }} isTitle align="center" colSpan={8} />
+                              </TableRow>
+                            )}
+                            {barcodeToDisplay?.notUsedCodes.map((row, index) => (
+                              <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
+                                <AppTableCell value={row.barcodes} isVerticalTop />
+                                <AppTableCell value={row.type} isVerticalTop />
+                                <AppTableCell value={MomentUtil.getDateStr(row.date, "MM/DD/YYYY")} isVerticalTop />
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
                     </Grid>
                   </>
                 )}
               </>
             )}
 
+            {/* Discount */}
+            <TicketSectionGrid title="Discount" />
+            <Grid item xs={12} container spacing={2} columnSpacing={2} sx={{ marginBottom: 1 }}>
+              <Grid item xs={2} md={1}>
+                <TicketInfoTitle title="Status" component={"p"} />
+                <Checkbox
+                  size="small"
+                  color="light"
+                  sx={{ p: 0 }}
+                  checked={discount.isActive}
+                  onChange={(e) => onChangeDiscount("isActive", e.target.checked)}
+                />
+              </Grid>
+              <Grid item xs={3} md={1}>
+                <TicketInfoTitle title="Percent" component={"p"} />
+                <TextField
+                  type="number"
+                  size="small"
+                  label=""
+                  variant="outlined"
+                  value={discount.value}
+                  sx={AppTextFieldSX()}
+                  error={!!errors.discount && !!errors.discount?.value}
+                  {...register(`discount.value`)}
+                  onChange={(e) => onChangeDiscount("value", e.target.value as string)}
+                />
+              </Grid>
+              <Grid item xs={7} md={3}>
+                <TicketInfoTitle title="Enable Date" component={"p"} />
+                <FlexRow sx={{ gap: 0.5 }}>
+                  <TextField
+                    type="date"
+                    // type="datetime-local"
+                    size="small"
+                    label=""
+                    variant="outlined"
+                    value={discount.startDate}
+                    sx={AppTextFieldSX()}
+                    {...register(`discount.startDate`)}
+                    onChange={(e) => onChangeDiscount("startDate", e.target.value as string)}
+                  />
+                  <Typography sx={{ mt: 0.5, color: "white" }}>-</Typography>
+                  <TextField
+                    type="date"
+                    // type="datetime-local"
+                    size="small"
+                    label=""
+                    variant="outlined"
+                    value={discount.endDate}
+                    sx={AppTextFieldSX()}
+                    {...register(`discount.endDate`)}
+                    onChange={(e) => onChangeDiscount("endDate", e.target.value as string)}
+                  />
+                </FlexRow>
+              </Grid>
+            </Grid>
+
+            {/* Coupons */}
+            <TicketSectionGrid title="Coupons" />
+            <Box sx={{ width: "100%", paddingLeft: "16px" }}>{CouponRow}</Box>
 
             <TicketSectionGrid title="Review Information" />
             <Grid item xs={6} md={2.5} lg={2.25} xl={2}>
@@ -1447,6 +2161,68 @@ export const TicketEdit = () => {
                           <Radio color="light" value={STATUS.INACTIVE} onChange={(e) => onChange(STATUS.INACTIVE)} />
                         }
                         label="Inactive"
+                      />
+                    </RadioGroup>
+                  )}
+                />
+                {errors.isFeatured && <FormHelperText sx={{ mt: 0 }}>{errors.isFeatured.message}</FormHelperText>}
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6} lg={4} xl={3}>
+              <TicketInfoTitle title="Top Activity" />
+              <FormControl error={!!errors.isTopActivity} variant="standard" fullWidth>
+                <Controller
+                  control={control}
+                  rules={{ required: true }}
+                  name="isTopActivity"
+                  defaultValue={editData.isTopActivity}
+                  render={({ field: { onChange, ...field } }) => (
+                    <RadioGroup
+                      row
+                      aria-labelledby="info-isTopActivity-label"
+                      sx={{ ml: 2, color: "white", justifyContent: { xs: "center", sm: "left" } }}
+                      {...field}
+                    >
+                      <FormControlLabel
+                        value={true}
+                        control={<Radio color="light" value={true} onChange={(e) => onChange(true)} />}
+                        label="Yes"
+                      />
+                      <FormControlLabel
+                        value={false}
+                        control={<Radio color="light" value={false} onChange={(e) => onChange(false)} />}
+                        label="No"
+                      />
+                    </RadioGroup>
+                  )}
+                />
+                {errors.isFeatured && <FormHelperText sx={{ mt: 0 }}>{errors.isFeatured.message}</FormHelperText>}
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6} lg={4} xl={3}>
+              <TicketInfoTitle title="Top Category" />
+              <FormControl error={!!errors.isTopCategory} variant="standard" fullWidth>
+                <Controller
+                  control={control}
+                  rules={{ required: true }}
+                  name="isTopCategory"
+                  defaultValue={editData.isTopCategory}
+                  render={({ field: { onChange, ...field } }) => (
+                    <RadioGroup
+                      row
+                      aria-labelledby="info-isTopCategory-label"
+                      sx={{ ml: 2, color: "white", justifyContent: { xs: "center", sm: "left" } }}
+                      {...field}
+                    >
+                      <FormControlLabel
+                        value={true}
+                        control={<Radio color="light" value={true} onChange={(e) => onChange(true)} />}
+                        label="Yes"
+                      />
+                      <FormControlLabel
+                        value={false}
+                        control={<Radio color="light" value={false} onChange={(e) => onChange(false)} />}
+                        label="No"
                       />
                     </RadioGroup>
                   )}

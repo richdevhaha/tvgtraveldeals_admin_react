@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
   Avatar,
-  AvatarGroup,
   Box,
   Button,
   Chip,
@@ -19,10 +18,8 @@ import {
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
-import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 
 import {
   AppCard,
@@ -31,18 +28,16 @@ import {
   AppTextField,
   ConfirmModal,
   FlexCol,
-  FlexRow,
   LoadingViewInComponent,
-  TicketFeaturedRowSkeleton,
+  BlogAllRowSkeleton,
 } from "../../components";
-import { SITE } from "../../config";
 import { RoutePath } from "../../routes";
-import { ticketSelector } from "../../redux/ticket/selector";
-import { dissociateFeatureTicketAction, fetchTicketsAction } from "../../redux/ticket/actions";
-import { Formatter } from "../../utils";
-import { BOOKING_TYPE, STATUS } from "../../types";
+import { blogSelector } from "../../redux/blog/selector";
+import { deleteBlogAction, fetchBlogsAction } from "../../redux/blog/actions";
+import { Formatter, StringUtil } from "../../utils";
+import { STATUS } from "../../types";
 
-export const FeaturedTickets = () => {
+export const Blogs = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const isSmallScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("md"));
@@ -52,16 +47,13 @@ export const FeaturedTickets = () => {
   const [previewImages, setPreviewImages] = useState([""]);
   const [search, setSearch] = useState("");
 
-  const { items, isLoading, isSucceeded } = useSelector(ticketSelector);
-  const fetchData = useCallback(() => dispatch(fetchTicketsAction()), [dispatch]);
-  const dissociateItem = useCallback((id: string) => dispatch(dissociateFeatureTicketAction(id)), [dispatch]);
+  const { items, isLoading, isSucceeded } = useSelector(blogSelector);
+  const fetchData = useCallback(() => dispatch(fetchBlogsAction()), [dispatch]);
+  const deleteItem = useCallback((id: string) => dispatch(deleteBlogAction(id)), [dispatch]);
 
-  const filteredTickets = useMemo(() => {
-    const data = items.filter((one) => one.isFeatured == true);
-    return search.length == 0
-      ? data
-      : data.filter((one) => one.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  }, [items, search]);
+  const filteredBlogs = useMemo(() => search.length == 0
+      ? items
+      : items.filter((one) => one.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [items, search]);
 
   useEffect(() => {
     if (items.length === 0 && !isSucceeded) {
@@ -73,8 +65,8 @@ export const FeaturedTickets = () => {
     !isLoading && isSucceeded && closeDeleteWin();
   }, [isLoading, isSucceeded]);
 
-  const editTicket = (id: string) => {
-    navigate(`${RoutePath.editTickets}?id=${id}`);
+  const editBlog = (id: string) => {
+    navigate(`${RoutePath.editBlog}?id=${id}`);
   };
 
   const confirmDeleteItem = (data: any) => {
@@ -106,8 +98,8 @@ export const FeaturedTickets = () => {
               }}
               views={previewImages.map((one, index) => ({
                 source: one,
-                caption: `Ticket image - ${previewImageIndex + 1}`,
-                alt: `Ticket image - ${previewImageIndex + 1}`,
+                caption: `Blog image - ${previewImageIndex + 1}`,
+                alt: `Blog image - ${previewImageIndex + 1}`,
                 loading: "lazy",
               }))}
             />
@@ -117,41 +109,32 @@ export const FeaturedTickets = () => {
       <ConfirmModal
         open={isDelete}
         title="Confirm Delete"
-        description={`Would you like to dissociate the ticket "${selectedData?.title}" from the featured tickets?`}
-        onConfirm={() => dissociateItem(selectedData?.id)}
+        description={`Would you like to delete the ticket "${selectedData?.title}"?`}
+        onConfirm={() => deleteItem(selectedData?.id)}
         onClose={closeDeleteWin}
       >
         <LoadingViewInComponent visible={isLoading} sx={{ backgroundColor: "#00000080" }} />
       </ConfirmModal>
       <AppPageTitle
-        title="Featured Tickets"
+        title="All Blogs"
         sx={{ "& .MuiTextField-root input": { width: 200 } }}
         rightAction={
           <>
             <AppTextField
               fullWidth={false}
-              placeholder="Search ticket with title"
+              placeholder="Search blog with title"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               sx={{ mr: 1, display: { xs: "none", md: "unset" } }}
             />
             <Button
               variant="contained"
-              color="success"
-              size="small"
-              sx={{ mr: 1, textTransform: "unset" }}
-              onClick={() => navigate(RoutePath.featuredTicketsAssign)}
-            >
-              {isSmallScreen ? <AssignmentTurnedInIcon sx={{ width: 23, height: 23 }} /> : "Assign Featured Ticket"}
-            </Button>
-            <Button
-              variant="contained"
               color="light"
               size="small"
               sx={{ textTransform: "unset" }}
-              onClick={() => navigate(RoutePath.editTickets)}
+              onClick={() => navigate("/blogs/edit-blog?id=new")}
             >
-              {isSmallScreen ? <AddIcon sx={{ width: 23, height: 23 }} /> : "New Ticket"}
+              {isSmallScreen ? <AddIcon sx={{ width: 23, height: 23 }} /> : "New Blog"}
             </Button>
           </>
         }
@@ -159,7 +142,7 @@ export const FeaturedTickets = () => {
           isSmallScreen && (
             <AppTextField
               fullWidth
-              placeholder="Search ticket with title"
+              placeholder="Search blog with title"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               sx={{ display: { xs: "unset", md: "none" } }}
@@ -180,94 +163,58 @@ export const FeaturedTickets = () => {
               <TableRow>
                 <AppTableCell value="No" isTitle isFirstCell sx={{ width: { xs: 40, sm: 70 } }} />
                 <AppTableCell value="Title" isTitle sx={{ flexGrow: 1, width: { xs: 120, sm: 200 } }} />
-                <AppTableCell value="Description" isTitle />
-                <AppTableCell value="Images" isTitle sx={{ width: { sm: 120, md: 140 } }} />
-                <AppTableCell value="Price" isTitle sx={{ width: { sm: 120, md: 140 } }} />
+                <AppTableCell value="Content" isTitle />
+                <AppTableCell value="Banner" isTitle sx={{ width: { sm: 120, md: 140 } }} />
                 <AppTableCell isTitle>
                   <FlexCol sx={{ alignItems: "center", ".MuiTypography-root": { fontSize: 12, fontWeight: "bold" } }}>
-                    <Typography>STATUS /</Typography>
-                    <Typography>BookingType</Typography>
+                    <Typography>STATUS</Typography>
                   </FlexCol>
                 </AppTableCell>
                 <AppTableCell value="Action" isTitle align="center" sx={{ width: { sm: 120, md: 180 } }} />
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredTickets.length === 0 &&
+              {filteredBlogs.length === 0 &&
                 isLoading &&
-                Formatter.nArray(5).map((index) => <TicketFeaturedRowSkeleton key={index} />)}
+                Formatter.nArray(5).map((index) => <BlogAllRowSkeleton key={index} />)}
 
-              {filteredTickets.length === 0 && !isLoading && (
+              {filteredBlogs.length === 0 && !isLoading && (
                 <TableRow sx={{ "&:last-child td": { border: 0, pb: 0 } }}>
-                  <AppTableCell value="There is no featured ticket" sx={{ py: 3 }} isTitle align="center" colSpan={6} />
+                  <AppTableCell value="There is no featured blog" sx={{ py: 3 }} isTitle align="center" colSpan={6} />
                 </TableRow>
               )}
-              {filteredTickets.map((row, index) => (
+              {filteredBlogs.map((row, index) => (
                 <TableRow key={index} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
                   <AppTableCell scope="row" value={index + 1} isFirstCell isVerticalTop />
                   <AppTableCell value={row.title} isVerticalTop />
-                  <AppTableCell value={row.description} lineCount={3} isVerticalTop />
+                  <AppTableCell value={StringUtil.stripHtmlTags(row.content)} lineCount={3} isVerticalTop />
                   <AppTableCell>
-                    {row.images && row.images.length > 0 && (
-                      <FlexRow sx={{ display: "flex", flexDirection: "row" }}>
-                        <AvatarGroup
-                          max={4}
-                          total={row.images.length}
-                          sx={{ ".MuiAvatar-root": { fontSize: 14, borderWidth: 0, color: "black !important" } }}
-                        >
-                          {row.images.map((one, index) => (
-                            <Avatar
-                              key={index}
-                              src={one}
-                              alt="name"
-                              sx={{ cursor: "pointer", borderRadius: 2.5 }}
-                              onClick={() => {
-                                setPreviewImages(row.images);
-                                setPreviewImageIndex(index);
-                              }}
-                            />
-                          ))}
-                        </AvatarGroup>
-                      </FlexRow>
-                    )}
+                    <Avatar
+                      key={index}
+                      src={row.banner}
+                      alt="name"
+                      sx={{ cursor: "pointer", borderRadius: 2.5 }}
+                      onClick={() => {
+                        setPreviewImages([row.banner]);
+                        setPreviewImageIndex(index);
+                      }}
+                    />
                   </AppTableCell>
-                  <AppTableCell value={`${row.currency?.symbol}${row.price}`} isVerticalTop />
                   <AppTableCell isVerticalTop>
                     <FlexCol sx={{ alignItems: "center" }}>
-                      <Typography
-                        sx={{
-                          color:
-                            row.status == STATUS.ACTIVE ? "white" : row.status == STATUS.INACTIVE ? "yellow" : "red",
-                          fontSize: { xs: 12, sm: 14 },
-                          ":first-letter": { textTransform: "uppercase" },
-                        }}
-                      >
-                        {row.status}
-                      </Typography>
                       <Chip
-                        label={row.bookingType === BOOKING_TYPE.AFFILATE_LINK ? "Affilate" : "Derectly"}
+                        label={row.status === STATUS.ACTIVE ? "Active" : "Inactive"}
                         variant="filled"
-                        color={row.bookingType === BOOKING_TYPE.AFFILATE_LINK ? "info" : "error"}
+                        color={row.status === STATUS.ACTIVE ? "info" : "error"}
                         sx={{ height: 20, borderRadius: 1 }}
                       />
                     </FlexCol>
                   </AppTableCell>
                   <AppTableCell align="center">
                     <Box sx={{ display: "flex", justifyContent: "center", gap: 1 }}>
-                      <Button variant="contained" color="success" size="small" onClick={() => editTicket(row.id)}>
+                      <Button variant="contained" color="success" size="small" onClick={() => editBlog(row.id)}>
                         <EditIcon sx={{ width: 20, height: 20 }} />
                       </Button>
-                      {row.status === STATUS.ACTIVE && (
-                        <Button
-                          variant="contained"
-                          color="warning"
-                          size="small"
-                          href={`${SITE.WEB}/tickets/${row.uri}`}
-                          target="_blank"
-                        >
-                          <VisibilityIcon sx={{ width: 20, height: 20 }} />
-                        </Button>
-                      )}
                       <Button variant="contained" color="error" size="small" onClick={() => confirmDeleteItem(row)}>
                         <DeleteIcon sx={{ width: 20, height: 20 }} />
                       </Button>

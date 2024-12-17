@@ -21,7 +21,7 @@ function* fetchOneTicket(): any {
   while (true) {
     const { payload } = yield take(actions.FETCH_ONE_TICKET + START);
     try {
-      const { data } = yield axiosClient.get(`/ticket/${payload}`);
+      const { data } = yield axiosClient.get(`/ticket/admin/${payload}`);
       yield put({ type: actions.FETCH_ONE_TICKET + SUCCESS, payload: data.data });
     } catch (error: any) {
       yield put({ type: actions.FETCH_ONE_TICKET + FAIL, payload: error.response ? error.response.data : error });
@@ -58,6 +58,22 @@ function* onQr(): any {
       ToastService.showErrorMessage(AppError(error).message);
       yield put({
         type: actions.ON_QR + FAIL,
+        payload: error.response ? error.response.data : error,
+      });
+    }
+  }
+}
+
+function* onBarcode(): any {
+  while (true) {
+    const { payload: { id, data: rquest } } = yield take(actions.ON_BARCODE + START);
+    try {
+      const { data } = yield axiosClient.post(`/ticket/barcode/${id}`, rquest);
+      yield put({ type: actions.ON_BARCODE + SUCCESS, payload: data });
+    } catch (error: any) {
+      ToastService.showErrorMessage(AppError(error).message);
+      yield put({
+        type: actions.ON_BARCODE + FAIL,
         payload: error.response ? error.response.data : error,
       });
     }
@@ -118,6 +134,23 @@ function* assignFeatureTicket(): any {
   }
 }
 
+function* disssociateFeatureTicket(): any {
+  while (true) {
+    const { payload } = yield take(actions.DISSOCIATE_FEATURE_TICKETS + START);
+    try {
+      const { data } = yield axiosClient.post(`/ticket/dissociate`, { id: payload });
+      yield put({ type: actions.DISSOCIATE_FEATURE_TICKETS + SUCCESS, payload });
+      ToastService.showSuccessMessage("Selected ticket has been updated successfully.");
+    } catch (error: any) {
+      ToastService.showErrorMessage(AppError(error).message);
+      yield put({
+        type: actions.DISSOCIATE_FEATURE_TICKETS + FAIL,
+        payload: error.response ? error.response.data : error,
+      });
+    }
+  }
+}
+
 function* changeTicketStatus(): any {
   while (true) {
     const { payload } = yield take(actions.ASSIN_FEATURE_TICKETS + START);
@@ -159,9 +192,11 @@ export default function* ticketSaga() {
     fork(fetchOneTicket),
     fork(createTicket),
     fork(onQr),
+    fork(onBarcode),
     fork(createDraftTicket),
     fork(updateTicket),
     fork(assignFeatureTicket),
+    fork(disssociateFeatureTicket),
     fork(changeTicketStatus),
     fork(deleteTicket),
   ]);

@@ -1,6 +1,7 @@
 export * from "./enums";
 
 export * from "./AdminUserItem";
+export * from "./Blog";
 export * from "./CurrencyItem";
 export * from "./Destination";
 export * from "./HelpRequest";

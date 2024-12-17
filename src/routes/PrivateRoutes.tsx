@@ -38,6 +38,9 @@ import {
   AllUsers,
   UserDetail,
   AllBookings,
+  BookingAnalytics,
+  Blogs,
+  BlogEdit
 } from "../pages";
 import { AdminUsers } from "../pages/Profile/AdminUsers";
 import { FeaturedTicketsAssign } from "../pages/Tickets/FeaturedTicketsAssign";
@@ -78,6 +81,15 @@ export const PrivateRoutes = [
     route: "/bookings/all",
     icon: EventIcon,
     component: <AllBookings />,
+    isSideMenu: true,
+    noCollapse: false,
+  },
+  {
+    type: "collapse",
+    name: "Booking Analytics",
+    route: "/bookings/analytics",
+    icon: EventIcon,
+    component: <BookingAnalytics />,
     isSideMenu: true,
     noCollapse: false,
   },
@@ -131,6 +143,24 @@ export const PrivateRoutes = [
     icon: AirlineStopsIcon,
     component: <DestinationTickets />,
     isSideMenu: true,
+    noCollapse: false,
+  },
+  { type: "title", title: "Blogs" },
+  {
+    type: "collapse",
+    name: "Blogs",
+    route: "/blogs",
+    icon: AirlineStopsIcon,
+    component: <Blogs />,
+    isSideMenu: true,
+    noCollapse: false,
+  },
+  {
+    type: "collapse",
+    name: "Edit ticket",
+    route: "/blogs/edit-blog",
+    component: <BlogEdit />,
+    isSideMenu: false,
     noCollapse: false,
   },
   { type: "title", title: "Users" },

@@ -21,6 +21,12 @@ export interface QrState {
   isLoading: boolean;
   error: any;
 }
+export interface BarcodeState {
+  items: any[];
+  isSucceeded: boolean;
+  isLoading: boolean;
+  error: any;
+}
 const initialQrState: QrState = {
   items: [],
   isSucceeded: false,
@@ -55,6 +61,31 @@ export const qrReducer = handleActions<QrState, any>(
         draft.items = [payload, ...state.items];
       }),
     [actions.ON_QR + FAIL]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = false;
+        draft.isSucceeded = false;
+        draft.error = payload;
+      }),
+  },
+  initialQrState
+)
+
+export const barcodeReducer = handleActions<QrState, any>(
+  {
+    /** ON_QR */
+    [actions.ON_BARCODE + START]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = true;
+        draft.isSucceeded = false;
+        draft.error = undefined;
+      }),
+    [actions.ON_BARCODE + SUCCESS]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = false;
+        draft.isSucceeded = true;
+        draft.items = [payload, ...state.items];
+      }),
+    [actions.ON_BARCODE + FAIL]: (state, { payload }) =>
       produce(state, (draft) => {
         draft.isLoading = false;
         draft.isSucceeded = false;
@@ -209,6 +240,31 @@ export const ticketReducer = handleActions<TicketState, any>(
         draft.error = undefined;
       }),
     [actions.ASSIN_FEATURE_TICKETS + FAIL]: (state, { payload }) =>
+      produce(state, (draft) => {
+        draft.isLoading = false;
+        draft.isSucceeded = false;
+        draft.error = payload;
+      }),
+
+    /** DISSOCIATE_FEATURE_TICKETS */
+    [actions.DISSOCIATE_FEATURE_TICKETS + START]: (state) =>
+      produce(state, (draft) => {
+        draft.isLoading = true;
+        draft.isSucceeded = false;
+        draft.error = undefined;
+      }),
+    [actions.DISSOCIATE_FEATURE_TICKETS + SUCCESS]: (state, { payload }) =>
+      produce(state, (draft) => {
+        const curItems = [...state.items];
+        const index = curItems.findIndex((one) => one.id === payload);
+        if (index > -1) curItems[index].isFeatured = false;
+
+        draft.isLoading = false;
+        draft.isSucceeded = true;
+        draft.items = curItems;
+        draft.error = undefined;
+      }),
+    [actions.DISSOCIATE_FEATURE_TICKETS + FAIL]: (state, { payload }) =>
       produce(state, (draft) => {
         draft.isLoading = false;
         draft.isSucceeded = false;
